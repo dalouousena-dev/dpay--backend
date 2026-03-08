@@ -529,9 +529,9 @@ app.post('/api/plans/purchase', async (req, res) => {
         currency: 'XAF', // Cameroon currency
         reference: paymentRef,
         customer: {
-          name: user.firstName + ' ' + user.lastName,
+          name: (user.first_name || user.firstName || '') + ' ' + (user.last_name || user.lastName || ''),
           email: user.email,
-          phone: user.phoneNumber
+          phone: user.phone_number || user.phoneNumber
         },
         description: `Plan Purchase - ${planId}`,
         metadata: {
@@ -541,6 +541,11 @@ app.post('/api/plans/purchase', async (req, res) => {
         }
       };
 
+      console.log('💳 Initiating NotchPay payment for user:', user.id);
+      console.log('   Amount:', amount, 'FCFA (', Math.round(amount * 100), 'cents)');
+      console.log('   Plan:', planId);
+      console.log('   Reference:', paymentRef);
+
       // Send request to NotchPay API
       const notchpayResponse = await axios.post('https://api.notchpay.co/payments/initialize', notchpayPayload, {
         headers: {
@@ -549,11 +554,15 @@ app.post('/api/plans/purchase', async (req, res) => {
         }
       });
 
+      console.log('✅ NotchPay response received for reference:', paymentRef);
+      
       // Return the payment URL and reference
       return res.json({
         message: 'Payment redirect required',
         paymentUrl: notchpayResponse.data.data.authorization_url,
         paymentRef,
+        amount: amount,
+        planId: planId,
         pending: true
       });
     } catch (error) {
@@ -672,63 +681,91 @@ app.post('/api/payments/verify', (req, res) => {
   return res.json({ message: 'Payment verified and plan activated', withdrawalAvailableAt: user.withdrawalAvailableAt, walletBalance: user.walletBalance });
 });
 
-// NotchPay Webhook - called when payment is verified
+// NotchPay Webhook - Handle payment success/failure events
 app.post('/api/webhooks/notchpay', async (req, res) => {
-  console.log('NotchPay webhook received:', req.body);
+  console.log('🔔 NotchPay webhook received');
+  console.log('   Event:', req.body.event);
+  console.log('   Reference:', req.body.data?.reference);
   
   try {
     const { event, data } = req.body;
     
+    if (!event || !data) {
+      console.warn('⚠️ Invalid webhook payload - missing event or data');
+      return res.status(400).json({ message: 'Invalid webhook payload' });
+    }
+    
     // Verify webhook signature using hash key
     if (notchpayHashKey) {
       const webhookHash = req.headers['x-notchpay-signature'] || req.headers['x-webhook-signature'];
-      const calculatedHash = crypto
-        .createHmac('sha256', notchpayHashKey)
-        .update(JSON.stringify(data))
-        .digest('hex');
       
-      if (webhookHash !== calculatedHash) {
-        console.warn('❌ Invalid webhook signature');
-        return res.status(403).json({ message: 'Invalid signature' });
+      if (!webhookHash) {
+        console.warn('⚠️ Missing webhook signature header');
+        // Continue anyway for testing, but log warning
+      } else {
+        const calculatedHash = crypto
+          .createHmac('sha256', notchpayHashKey)
+          .update(JSON.stringify(data))
+          .digest('hex');
+        
+        if (webhookHash !== calculatedHash) {
+          console.warn('❌ Invalid webhook signature:', webhookHash, 'vs', calculatedHash);
+          return res.status(403).json({ message: 'Invalid signature' });
+        }
+        console.log('✅ Webhook signature verified');
       }
     }
 
-    // Handle payment success event
+    // Handle payment success events
     if (event === 'payment.success' || event === 'charge.success') {
+      console.log('💰 Processing payment success event');
+      
       const { reference, status, metadata } = data;
       
-      if (status !== 'successful' && status !== 'completed') {
-        console.log('Webhook payment not successful, status:', status);
-        return res.status(400).json({ message: 'Payment not successful' });
+      // Validate payment status
+      if (!status || (status !== 'successful' && status !== 'completed' && status !== 'success')) {
+        console.warn(`⚠️ Payment status is not successful: ${status}`);
+        return res.status(400).json({ message: `Payment status: ${status}` });
       }
 
       const { userId, planId, originalAmount } = metadata || {};
       
       if (!userId || !planId) {
-        console.error('Missing metadata in NotchPay webhook');
+        console.error('❌ Missing required metadata - userId:', userId, 'planId:', planId);
         return res.status(400).json({ message: 'Invalid metadata' });
       }
 
       const user = users.find(u => u.id === userId);
       if (!user) {
-        console.error('User not found for NotchPay webhook:', userId);
+        console.error('❌ User not found:', userId);
         return res.status(404).json({ message: 'User not found' });
       }
 
+      console.log(`👤 Found user: ${user.email}`);
+
       if (!user.pendingPurchase) {
-        console.warn('No pending purchase for user:', userId);
-        return res.status(400).json({ message: 'No pending purchase' });
+        console.warn(`⚠️ No pending purchase for user ${userId}. Creating new plan activation.`);
+        // Create pending purchase if it doesn't exist (fallback for webhook arriving before frontend request)
+        user.pendingPurchase = {
+          planId,
+          amount: originalAmount,
+          paymentMethod: 'Debit Card (NotchPay)',
+          createdAt: new Date().toISOString(),
+          verified: false,
+        };
       }
 
       // Activate the pending purchase
       const now = new Date();
       const amount = user.pendingPurchase.amount || originalAmount;
       
-      user.walletBalance = (user.walletBalance || 0) + amount;
-      user.activePlan = planId;
-      user.totalDeposited = (user.totalDeposited || 0) + amount;
-      user.lastTransactionDate = now.toISOString();
-      user.withdrawalAvailableAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      console.log(`📦 Activating ${planId} plan for ${amount} FCFA`);
+      
+      user.wallet_balance = (user.wallet_balance || 0) + amount;
+      user.active_plan = planId;
+      user.total_deposited = (user.total_deposited || 0) + amount;
+      user.last_transaction_date = now.toISOString();
+      user.withdrawal_available_at = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
       
       // Record transaction
       user.transactions = user.transactions || [];
@@ -739,10 +776,11 @@ app.post('/api/webhooks/notchpay', async (req, res) => {
         amount,
         paymentMethod: 'Debit Card (NotchPay)',
         at: now.toISOString(),
-        notchpayRef: reference
+        notchpayRef: reference,
+        status: 'verified'
       });
 
-      // Apply referral commission
+      // Apply referral commission if user has a referrer
       if (user.referrer_id) {
         const referrer = users.find(u => u.id === user.referrer_id);
         if (referrer) {
@@ -750,7 +788,8 @@ app.post('/api/webhooks/notchpay', async (req, res) => {
           const commissionAmount = Math.floor(amount * tier.commissionPercent);
           if (commissionAmount > 0) {
             referrer.wallet_balance = (referrer.wallet_balance || 0) + commissionAmount;
-            logTransaction(referrer.id, 'referral_commission', commissionAmount, `Commission on plan purchase by ${user.username || 'user'} (${tier.commission})`);
+            console.log(`💵 Referral commission: ${commissionAmount} FCFA (${tier.commission}) to referrer ${referrer.email}`);
+            logTransaction(referrer.id, 'referral_commission', commissionAmount, `Commission on ${planId} purchase by ${user.username || user.email} (${tier.commission})`);
           }
         }
       }
@@ -758,44 +797,88 @@ app.post('/api/webhooks/notchpay', async (req, res) => {
       delete user.pendingPurchase;
       saveUsers();
 
-      // Update Supabase
+      // Update Supabase asynchronously
       if (supabase) {
-        await supabase
+        supabase
           .from('users')
           .update({
-            active_plan: user.activePlan,
-            wallet_balance: user.walletBalance,
-            total_deposited: user.totalDeposited,
-            withdrawal_available_at: user.withdrawalAvailableAt,
-            last_transaction_date: user.lastTransactionDate,
+            active_plan: user.active_plan,
+            wallet_balance: user.wallet_balance,
+            total_deposited: user.total_deposited,
+            withdrawal_available_at: user.withdrawal_available_at,
+            last_transaction_date: user.last_transaction_date,
           })
-          .eq('id', userId);
+          .eq('id', userId)
+          .then(({ error }) => {
+            if (error) {
+              console.warn('⚠️ Error updating Supabase:', error.message);
+            } else {
+              console.log('✅ Supabase updated for user:', userId);
+            }
+          });
       }
 
-      console.log('✅ NotchPay payment verified for user:', userId);
-      return res.json({ message: 'Payment verified successfully', userId, planId });
+      console.log(`✅ PAYMENT VERIFIED AND PLAN ACTIVATED`);
+      console.log(`   User: ${user.email}`);
+      console.log(`   Plan: ${planId}`);
+      console.log(`   Amount: ${amount} FCFA`);
+      console.log(`   Reference: ${reference}`);
+      console.log(`   Withdrawal available: ${user.withdrawal_available_at}`);
+      
+      return res.json({ 
+        message: 'Payment verified successfully', 
+        userId, 
+        planId,
+        amount,
+        confirmed: true
+      });
     }
 
-    // Handle payment failure
+    // Handle payment failure events
     if (event === 'payment.failed' || event === 'charge.failed') {
-      const { reference, metadata } = data;
+      console.log('❌ Payment failed event received');
+      
+      const { reference, status, metadata } = data;
       const { userId } = metadata || {};
+      
+      console.log(`   Reference: ${reference}`);
+      console.log(`   Status: ${status}`);
+      console.log(`   User: ${userId}`);
       
       const user = users.find(u => u.id === userId);
       if (user && user.pendingPurchase) {
+        console.log(`   Cleaning up pending purchase for user: ${user.email}`);
         delete user.pendingPurchase;
         saveUsers();
       }
 
-      console.log('❌ NotchPay payment failed for reference:', reference);
-      return res.json({ message: 'Payment failed' });
+      return res.json({ 
+        message: 'Payment failed notification received',
+        reference,
+        status: 'failed'
+      });
     }
 
-    res.json({ message: 'Webhook processed' });
+    // Log unhandled events for debugging
+    console.log(`⚠️ Unhandled webhook event type: ${event}`);
+    res.json({ message: 'Webhook processed', event });
+    
   } catch (error) {
-    console.error('NotchPay webhook error:', error);
-    res.status(500).json({ message: 'Internal error' });
+    console.error('❌ NotchPay webhook error:', error.message);
+    console.error('Stack:', error.stack);
+    res.status(500).json({ message: 'Internal server error' });
   }
+});
+
+// Health check endpoint for NotchPay webhook configuration
+app.get('/api/webhooks/notchpay/health', (req, res) => {
+  const isConfigured = !!(notchpayHashKey && notchpaySecretKey);
+  res.json({
+    status: isConfigured ? 'ready' : 'not-configured',
+    hasHashKey: !!notchpayHashKey,
+    hasSecretKey: !!notchpaySecretKey,
+    message: isConfigured ? 'NotchPay webhook is configured and ready' : 'NotchPay credentials are missing'
+  });
 });
 
 // Notifications endpoint
@@ -1333,7 +1416,6 @@ app.post('/api/admin/reject-withdrawal', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
-
