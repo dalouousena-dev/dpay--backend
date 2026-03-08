@@ -492,7 +492,40 @@ app.post('/api/plans/purchase', async (req, res) => {
   console.log('Received plan purchase request', req.body);
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
-  const user = findUserByToken(token);
+  
+  let user = findUserByToken(token);
+  
+  // Fallback: try Supabase if user not found in memory
+  if (!user && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('token', token)
+        .single();
+      if (!error && data) {
+        user = data;
+        // Normalize Supabase field names to camelCase for consistency
+        if (user.wallet_balance !== undefined) user.walletBalance = user.wallet_balance;
+        if (user.active_plan !== undefined) user.activePlan = user.active_plan;
+        if (user.total_deposited !== undefined) user.totalDeposited = user.total_deposited;
+        if (user.withdrawal_available_at !== undefined) user.withdrawalAvailableAt = user.withdrawal_available_at;
+        if (user.last_transaction_date !== undefined) user.lastTransactionDate = user.last_transaction_date;
+        if (user.first_name !== undefined) user.firstName = user.first_name;
+        if (user.last_name !== undefined) user.lastName = user.last_name;
+        if (user.phone_number !== undefined) user.phoneNumber = user.phone_number;
+        if (user.referral_code !== undefined) user.referralCode = user.referral_code;
+        if (user.referrer_id !== undefined) user.referrerId = user.referrer_id;
+        if (user.referral_count !== undefined) user.referralCount = user.referral_count;
+        // Also add to in-memory array for faster lookups
+        users.push(user);
+        saveUsers();
+      }
+    } catch (err) {
+      console.warn('Supabase token lookup failed:', err.message);
+    }
+  }
+  
   if (!user) {
     console.log('purchase denied, invalid token');
     return res.status(401).json({ message: 'Invalid or missing token' });
@@ -1416,7 +1449,6 @@ app.post('/api/admin/reject-withdrawal', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(POST, () => {
+  console.log(`Server running on port ${POST}`);
 });
-
