@@ -3,6 +3,7 @@ const cors = require('cors');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
@@ -27,6 +28,17 @@ if (supabaseUrl && supabaseKey) {
   console.log('✅ Supabase initialized at', supabaseUrl);
 } else {
   console.warn('⚠️ Supabase credentials not found. Using file-based storage.');
+}
+
+/* ===== NOTCHPAY INITIALIZATION ===== */
+const notchpayPublicKey = process.env.NOTCHPAY_PUBLIC_KEY;
+const notchpaySecretKey = process.env.NOTCHPAY_SECRET_KEY;
+const notchpayHashKey = process.env.NOTCHPAY_HASH_KEY;
+
+if (notchpayPublicKey && notchpaySecretKey) {
+  console.log('✅ NotchPay initialized with public key');
+} else {
+  console.warn('⚠️ NotchPay credentials not found. Debit card payments will be disabled.');
 }
 
 // ===== FILE-BASED STORAGE (Fallback) =====
@@ -463,7 +475,7 @@ app.get('/api/referral/code', async (req, res) => {
     }
 
     const referralCode = user.referral_code || user.referralCode;
-    const referralLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/register?ref=${referralCode}`;
+    const referralLink = `${process.env.FRONTEND_URL || 'https://computerarchi.com/Dpay'}/register?ref=${referralCode}`;
     res.json({
       referralCode: referralCode,
       referralLink: referralLink,
@@ -476,7 +488,7 @@ app.get('/api/referral/code', async (req, res) => {
 
 // --- plan purchase endpoints ---
 
-app.post('/api/plans/purchase', (req, res) => {
+app.post('/api/plans/purchase', async (req, res) => {
   console.log('Received plan purchase request', req.body);
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
@@ -493,23 +505,68 @@ app.post('/api/plans/purchase', (req, res) => {
 
   const now = new Date();
 
-  // credit the wallet balance for all plan purchases (invested amount becomes available for marketplace)
-  user.walletBalance = (user.walletBalance || 0) + amount;
-
-  // If payment method is Debit Card, create a pending purchase and wait for verification
+  // If payment method is Debit Card, redirect to NotchPay
   if (paymentMethod === 'Debit Card' || paymentMethod === 'Debit' || paymentMethod === 'debit') {
-    user.pendingPurchase = {
-      planId,
-      amount,
-      paymentMethod,
-      createdAt: now.toISOString(),
-      verified: false,
-    };
-    saveUsers();
-    return res.json({ message: 'Purchase pending verification', pending: true });
+    if (!notchpaySecretKey || !notchpayPublicKey) {
+      return res.status(500).json({ message: 'NotchPay is not configured. Please contact support.' });
+    }
+
+    try {
+      // Create a pending purchase record
+      user.pendingPurchase = {
+        planId,
+        amount,
+        paymentMethod: 'Debit Card',
+        createdAt: now.toISOString(),
+        verified: false,
+      };
+      saveUsers();
+
+      // Initiate NotchPay payment
+      const paymentRef = `PLAN_${user.id}_${Date.now()}`;
+      const notchpayPayload = {
+        amount: Math.round(amount * 100), // Convert to cents
+        currency: 'XAF', // Cameroon currency
+        reference: paymentRef,
+        customer: {
+          name: user.firstName + ' ' + user.lastName,
+          email: user.email,
+          phone: user.phoneNumber
+        },
+        description: `Plan Purchase - ${planId}`,
+        metadata: {
+          userId: user.id,
+          planId,
+          originalAmount: amount
+        }
+      };
+
+      // Send request to NotchPay API
+      const notchpayResponse = await axios.post('https://api.notchpay.co/payments/initialize', notchpayPayload, {
+        headers: {
+          'Authorization': `Bearer ${notchpaySecretKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      // Return the payment URL and reference
+      return res.json({
+        message: 'Payment redirect required',
+        paymentUrl: notchpayResponse.data.data.authorization_url,
+        paymentRef,
+        pending: true
+      });
+    } catch (error) {
+      console.error('NotchPay initialization error:', error.response?.data || error.message);
+      return res.status(500).json({ 
+        message: 'Failed to initialize payment',
+        error: error.response?.data?.message || error.message 
+      });
+    }
   }
 
-  // Otherwise assume instant activation (mobile money)
+  // Otherwise assume instant activation (mobile money - Orange Money or MTN)
+  user.walletBalance = (user.walletBalance || 0) + amount;
   user.activePlan = planId;
   user.totalDeposited = (user.totalDeposited || 0) + amount;
   const withdrawalDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -613,6 +670,132 @@ app.post('/api/payments/verify', (req, res) => {
   }
 
   return res.json({ message: 'Payment verified and plan activated', withdrawalAvailableAt: user.withdrawalAvailableAt, walletBalance: user.walletBalance });
+});
+
+// NotchPay Webhook - called when payment is verified
+app.post('/api/webhooks/notchpay', async (req, res) => {
+  console.log('NotchPay webhook received:', req.body);
+  
+  try {
+    const { event, data } = req.body;
+    
+    // Verify webhook signature using hash key
+    if (notchpayHashKey) {
+      const webhookHash = req.headers['x-notchpay-signature'] || req.headers['x-webhook-signature'];
+      const calculatedHash = crypto
+        .createHmac('sha256', notchpayHashKey)
+        .update(JSON.stringify(data))
+        .digest('hex');
+      
+      if (webhookHash !== calculatedHash) {
+        console.warn('❌ Invalid webhook signature');
+        return res.status(403).json({ message: 'Invalid signature' });
+      }
+    }
+
+    // Handle payment success event
+    if (event === 'payment.success' || event === 'charge.success') {
+      const { reference, status, metadata } = data;
+      
+      if (status !== 'successful' && status !== 'completed') {
+        console.log('Webhook payment not successful, status:', status);
+        return res.status(400).json({ message: 'Payment not successful' });
+      }
+
+      const { userId, planId, originalAmount } = metadata || {};
+      
+      if (!userId || !planId) {
+        console.error('Missing metadata in NotchPay webhook');
+        return res.status(400).json({ message: 'Invalid metadata' });
+      }
+
+      const user = users.find(u => u.id === userId);
+      if (!user) {
+        console.error('User not found for NotchPay webhook:', userId);
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      if (!user.pendingPurchase) {
+        console.warn('No pending purchase for user:', userId);
+        return res.status(400).json({ message: 'No pending purchase' });
+      }
+
+      // Activate the pending purchase
+      const now = new Date();
+      const amount = user.pendingPurchase.amount || originalAmount;
+      
+      user.walletBalance = (user.walletBalance || 0) + amount;
+      user.activePlan = planId;
+      user.totalDeposited = (user.totalDeposited || 0) + amount;
+      user.lastTransactionDate = now.toISOString();
+      user.withdrawalAvailableAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      
+      // Record transaction
+      user.transactions = user.transactions || [];
+      user.transactions.push({ 
+        id: crypto.randomBytes(8).toString('hex'), 
+        type: 'plan_purchase', 
+        planId, 
+        amount,
+        paymentMethod: 'Debit Card (NotchPay)',
+        at: now.toISOString(),
+        notchpayRef: reference
+      });
+
+      // Apply referral commission
+      if (user.referrer_id) {
+        const referrer = users.find(u => u.id === user.referrer_id);
+        if (referrer) {
+          const tier = getCommissionTier(referrer.referral_count || 0);
+          const commissionAmount = Math.floor(amount * tier.commissionPercent);
+          if (commissionAmount > 0) {
+            referrer.wallet_balance = (referrer.wallet_balance || 0) + commissionAmount;
+            logTransaction(referrer.id, 'referral_commission', commissionAmount, `Commission on plan purchase by ${user.username || 'user'} (${tier.commission})`);
+          }
+        }
+      }
+
+      delete user.pendingPurchase;
+      saveUsers();
+
+      // Update Supabase
+      if (supabase) {
+        await supabase
+          .from('users')
+          .update({
+            active_plan: user.activePlan,
+            wallet_balance: user.walletBalance,
+            total_deposited: user.totalDeposited,
+            withdrawal_available_at: user.withdrawalAvailableAt,
+            last_transaction_date: user.lastTransactionDate,
+          })
+          .eq('id', userId);
+      }
+
+      console.log('✅ NotchPay payment verified for user:', userId);
+      return res.json({ message: 'Payment verified successfully', userId, planId });
+    }
+
+    // Handle payment failure
+    if (event === 'payment.failed' || event === 'charge.failed') {
+      const { reference, metadata } = data;
+      const { userId } = metadata || {};
+      
+      const user = users.find(u => u.id === userId);
+      if (user && user.pendingPurchase) {
+        delete user.pendingPurchase;
+        saveUsers();
+      }
+
+      console.log('❌ NotchPay payment failed for reference:', reference);
+      return res.json({ message: 'Payment failed' });
+    }
+
+    res.json({ message: 'Webhook processed' });
+  } catch (error) {
+    console.error('NotchPay webhook error:', error);
+    res.status(500).json({ message: 'Internal error' });
+  }
 });
 
 // Notifications endpoint
@@ -913,48 +1096,72 @@ app.get('/api/admin/users', async (req, res) => {
   }
   
   try {
+    let usersData = [];
+    
+    // Try to fetch from Supabase first
     if (supabase) {
       const { data, error } = await supabase
         .from('users')
         .select('id, email, username, phone_number, active_plan, next_purchase_window_ends, withdrawal_available_at, created_at, wallet_balance, total_profits, total_deposited, is_active');
+      
       if (error) {
-        console.error('Supabase error fetching users:', error);
-        throw error;
+        console.warn('⚠️ Supabase error fetching users, falling back to file storage:', error.message);
+      } else if (data && data.length > 0) {
+        console.log('✅ Successfully fetched', data.length, 'users from Supabase');
+        // Map Supabase data to expected frontend format
+        usersData = data.map(u => ({
+          id: u.id,
+          email: u.email,
+          username: u.username,
+          phoneNumber: u.phone_number,
+          activePlan: u.active_plan,
+          nextPurchaseWindowEnds: u.next_purchase_window_ends,
+          withdrawalAvailableAt: u.withdrawal_available_at,
+          createdAt: u.created_at,
+          walletBalance: u.wallet_balance,
+          totalProfits: u.total_profits,
+          totalDeposited: u.total_deposited,
+          isActive: u.is_active
+        }));
+        return res.json(usersData);
       }
-      console.log('Successfully fetched', data?.length || 0, 'users from Supabase');
-      // Map to expected frontend format
-      const sanitized = data.map(u => ({
-        id: u.id,
-        email: u.email,
-        username: u.username,
-        phoneNumber: u.phone_number,
-        activePlan: u.active_plan,
-        nextPurchaseWindowEnds: u.next_purchase_window_ends,
-        withdrawalAvailableAt: u.withdrawal_available_at,
-        createdAt: u.created_at,
-        walletBalance: u.wallet_balance,
-        totalProfits: u.total_profits,
-        totalDeposited: u.total_deposited,
-        isActive: u.is_active
-      }));
-      return res.json(sanitized);
-    } else {
-      // Fallback to file-based storage
-      const sanitized = users.map(u => ({
+    }
+    
+    // Fallback to file-based storage if Supabase is not available or empty
+    console.log('📁 Using file-based storage, found', users.length, 'users');
+    usersData = users.map(u => ({
+      id: u.id,
+      email: u.email,
+      username: u.username,
+      phoneNumber: u.phoneNumber,
+      activePlan: u.activePlan,
+      nextPurchaseWindowEnds: u.nextPurchaseWindowEnds,
+      withdrawalAvailableAt: u.withdrawalAvailableAt,
+      createdAt: u.createdAt,
+      walletBalance: u.walletBalance || 0,
+      totalProfits: u.totalProfits || 0,
+      totalDeposited: u.totalDeposited || 0,
+      isActive: u.isActive || true
+    }));
+    
+    return res.json(usersData);
+  } catch (err) {
+    console.error('❌ Error fetching admin users:', err);
+    // Even if there's an error, try to return file-based data as last resort
+    try {
+      const fallbackUsers = users.map(u => ({
         id: u.id,
         email: u.email,
         username: u.username,
         phoneNumber: u.phoneNumber,
         activePlan: u.activePlan,
-        nextPurchaseWindowEnds: u.nextPurchaseWindowEnds,
-        withdrawalAvailableAt: u.withdrawalAvailableAt,
-        createdAt: u.createdAt,
+        walletBalance: u.walletBalance || 0
       }));
-      return res.json(sanitized);
+      return res.json(fallbackUsers);
+    } catch (fallbackErr) {
+      console.error('❌ Fallback failed:', fallbackErr);
+      res.status(500).json({ message: 'Failed to fetch users', error: err.message });
     }
-  } catch (err) {
-    console.error('Error fetching admin users:', err);
-    res.status(500).json({ message: 'Failed to fetch users' });
   }
 });
 
@@ -1126,7 +1333,6 @@ app.post('/api/admin/reject-withdrawal', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
