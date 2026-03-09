@@ -45,8 +45,9 @@ if (supabaseUrl && supabaseKey) {
 
 /* ===== NOTCHPAY ===== */
 
-const notchpaySecret = process.env.NOTCHPAY_SECRET_KEY;
-const notchpayPublic = process.env.NOTCHPAY_PUBLIC_KEY;
+const notchpaySecret = process.env.Privatekey;
+const notchpayPublic = process.env.Publickey;
+const notchpayPublic = process.env.Hashkey;
 
 if (notchpaySecret && notchpayPublic) {
   console.log("✅ NotchPay initialized");
@@ -263,3 +264,4 @@ app.get("/", (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
