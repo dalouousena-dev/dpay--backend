@@ -1449,6 +1449,25 @@ app.post('/api/admin/reject-withdrawal', async (req, res) => {
   }
 });
 
-app.listen(POST, () => {
-  console.log(`Server running on port ${POST}`);
+/* ===============================
+   HEALTH CHECK
+================================ */
+
+app.get("/", (req, res) => {
+  res.json({
+    status: "DPAY backend running",
+    time: new Date().toISOString()
+  });
+});
+
+/* ===============================
+   START SERVER
+================================ */
+
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log("====================================");
+  console.log(`🚀 DPAY backend running on port ${PORT}`);
+  console.log("====================================");
 });
