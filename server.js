@@ -136,7 +136,9 @@ function findUserByToken(token) {
 
 // find user by referral code
 function findUserByReferralCode(code) {
-  return users.find(u => u.referralCode === code);
+  return users.find(
+    u => u.referral_code === code || u.referralCode === code
+  );
 }
 
 // calculate commission tier based on referral count
@@ -1483,6 +1485,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
