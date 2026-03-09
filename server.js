@@ -8,14 +8,14 @@ const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 const app = express();
-
+app.use(express.json());
 /* ===== IMPORTANT FOR RENDER ===== */
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 
 /* ===== MIDDLEWARE ===== */
 app.use(cors());
-app.use(express.json());
+
 
 /* ===== SUPABASE INITIALIZATION ===== */
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -317,22 +317,26 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  const user = await getUserByEmail(email);
-  
-  if (!user || user.password !== password) {
-    return res.status(401).json({ message: 'Invalid credentials' });
+app.post('/api/auth/admin-login', (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Missing credentials" });
+    }
+
+    if (email === "dpay@gmail.com" && password === "693288582") {
+      adminToken = makeToken();
+      saveAdminToken();
+      return res.json({ token: adminToken });
+    }
+
+    return res.status(401).json({ message: "Invalid admin credentials" });
+
+  } catch (error) {
+    console.error("Admin login error:", error);
+    res.status(500).json({ message: "Server error during admin login" });
   }
-  
-  // Ensure user has a token
-  let token = user.token;
-  if (!token) {
-    token = makeToken();
-    await updateUser(user.id, { token });
-  }
-  
-  return res.json({ token });
 });
 
 app.post('/api/auth/admin-login', (req, res) => {
@@ -1463,11 +1467,15 @@ app.get("/", (req, res) => {
 /* ===============================
    START SERVER
 ================================ */
-
+app.use((err, req, res, next) => {
+  console.error("🔥 Server error:", err);
+  res.status(500).json({ message: "Internal server error" });
+ }); 
 app.listen(PORT, () => {
   console.log("====================================");
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
