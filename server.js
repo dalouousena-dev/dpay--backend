@@ -31,9 +31,9 @@ if (supabaseUrl && supabaseKey) {
 }
 
 /* ===== NOTCHPAY INITIALIZATION ===== */
-const notchpayPublicKey = process.env.Publickey;
-const notchpaySecretKey = process.env.Privatekey;
-const notchpayHashKey = process.env.Hashkey;
+const notchpayPublicKey = process.env.NOTCHPAY_PUBLIC_KEY;
+const notchpaySecretKey = process.env.NOTCHPAY_SECRET_KEY;
+const notchpayHashKey = process.env.NOTCHPAY_HASH_KEY;
 
 if (notchpayPublicKey && notchpaySecretKey) {
   console.log('✅ NotchPay initialized with public key');
