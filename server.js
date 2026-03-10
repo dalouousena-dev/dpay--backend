@@ -253,19 +253,39 @@ async function logTransaction(userId, type, amount, description = '') {
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, username } = req.body;
 
-  const existingUser = await getUserByEmail(email);
-
-  if (existingUser) {
-    return res.status(409).json({ message: 'User already exists' });
+  if (!email || !password || !username) {
+    return res.status(400).json({ message: "Missing required fields" });
   }
 
-  // register logic here...
+  try {
+    const existingUser = await getUserByEmail(email);
 
-  return res.status(201).json({
-    message: 'User created'
-  });
+    if (existingUser) {
+      return res.status(409).json({ message: "User already exists" });
+    }
 
-});   // ✅ REGISTER ROUTE ENDS HERE
+    const newUser = {
+      id: makeUUID(),
+      email,
+      password,
+      username,
+      token: makeToken(),
+      created_at: new Date().toISOString()
+    };
+
+    await createUser(newUser);
+
+    return res.status(201).json({
+      message: "User created",
+      token: newUser.token,
+      userId: newUser.id
+    });
+
+  } catch (err) {
+    console.error("Register error:", err);
+    res.status(500).json({ message: "Registration failed" });
+  }
+});  // ✅ REGISTER ROUTE ENDS HERE
 
 /* LOGIN ROUTE STARTS HERE */
 
@@ -1512,6 +1532,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
