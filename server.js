@@ -272,17 +272,27 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
-  const user = await getUserByEmail(email);
-
-  if (!user || user.password !== password) {
-    return res.status(401).json({ message: 'Invalid email or password' });
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Missing credentials' });
   }
 
-  return res.json({
-    message: "Login successful",
-    token: user.token,
-    userId: user.id
-  });
+  try {
+    const user = await getUserByEmail(email);
+
+    if (!user || user.password !== password) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    return res.json({
+      message: "Login successful",
+      token: user.token,
+      userId: user.id
+    });
+
+  } catch (err) {
+    console.error("Login error:", err);
+    return res.status(500).json({ message: "Login failed" });
+  }
 });
   // Check if user already exists
   const existingUser = await getUserByEmail(email);
@@ -1506,6 +1516,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
