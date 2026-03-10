@@ -38,19 +38,12 @@ if (supabaseUrl && supabaseKey) {
 }
 
 /* ===== NOTCHPAY INITIALIZATION ===== */
-const NotchPay = require("@notchpay/notchpay");
-
-let notchpay = null;
 
 const notchpayPublicKey = process.env.NOTCHPAY_PUBLIC_KEY;
 const notchpaySecretKey = process.env.NOTCHPAY_SECRET_KEY;
 const notchpayHashKey = process.env.NOTCHPAY_HASH_KEY;
 
 if (notchpaySecretKey) {
-  notchpay = new NotchPay({
-    secretKey: notchpaySecretKey
-  });
-
   console.log("✅ NotchPay initialized with secret key");
 } else {
   console.warn("⚠️ NotchPay secret key not found. Payments disabled.");
@@ -1480,6 +1473,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
