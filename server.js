@@ -256,6 +256,18 @@ app.post('/api/auth/register', async (req, res) => {
   if (!email || !password || !username) {
     return res.status(400).json({ message: 'Missing required fields' });
   }
+ 
+app.post('/api/auth/register', async (req, res) => {
+  const { email, password, username, firstName, lastName, phoneNumber, referralCode } = req.body;
+  if (!email || !password || !username) {
+    return res.status(400).json({ message: 'Missing required fields' });
+  }
+  
+  // Check if user already exists
+  const existingUser = await getUserByEmail(email);
+  if (existingUser) {
+    return res.status(409).json({ message: 'User already exists' });
+  } 
   
   // Check if user already exists
   const existingUser = await getUserByEmail(email);
@@ -1473,6 +1485,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
