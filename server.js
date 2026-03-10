@@ -250,18 +250,42 @@ async function logTransaction(userId, type, amount, description = '') {
 }
 
 // --- auth endpoints ---
+  app.post('/api/auth/register', async (req, res) => {
+  const { email, password, username } = req.body;
 
-app.post('/api/auth/register', async (req, res) => {
-  const { email, password, username, firstName, lastName, phoneNumber, referralCode } = req.body;
-  if (!email || !password || !username) {
-    return res.status(400).json({ message: 'Missing required fields' });
+  const existingUser = await getUserByEmail(email);
+
+  if (existingUser) {
+    return res.status(409).json({ message: 'User already exists' });
   }
- 
-app.post('/api/auth/register', async (req, res) => {
-  const { email, password, username, firstName, lastName, phoneNumber, referralCode } = req.body;
-  if (!email || !password || !username) {
-    return res.status(400).json({ message: 'Missing required fields' });
+
+  // register logic here...
+
+  return res.status(201).json({
+    message: 'User created'
+  });
+
+});   // ✅ REGISTER ROUTE ENDS HERE
+
+
+
+/* LOGIN ROUTE STARTS HERE */
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  const user = await getUserByEmail(email);
+
+  if (!user || user.password !== password) {
+    return res.status(401).json({ message: 'Invalid email or password' });
   }
+
+  return res.json({
+    message: "Login successful",
+    token: user.token,
+    userId: user.id
+  });
+});
   
   // Check if user already exists
   const existingUser = await getUserByEmail(email);
@@ -1485,6 +1509,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
