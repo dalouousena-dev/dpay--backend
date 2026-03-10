@@ -541,7 +541,7 @@ app.get('/api/referral/code', async (req, res) => {
     }
 
     const referralCode = user.referral_code || user.referralCode;
-    const referralLink = `${process.env.FRONTEND_URL || 'https://computerarchi.com/Dpay'}/register?ref=${referralCode}`;
+   const referralLink = `${process.env.FRONTEND_URL || 'https://computerarchi.com/Dpay'}/#/register?ref=${referralCode}`;
     res.json({
       referralCode: referralCode,
       referralLink: referralLink,
@@ -1573,6 +1573,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
