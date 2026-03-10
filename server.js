@@ -295,6 +295,8 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
   // Check if user already exists
+app.post('/api/auth/register', async (req, res) => {
+  const { email, password, username } = req.body;
   const existingUser = await getUserByEmail(email);
   if (existingUser) {
     return res.status(409).json({ message: 'User already exists' });
@@ -1516,6 +1518,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
