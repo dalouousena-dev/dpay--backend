@@ -302,12 +302,6 @@ app.post('/api/auth/register', async (req, res) => {
     return res.status(409).json({ message: 'User already exists' });
   } 
   
-  // Check if user already exists
-  const existingUser = await getUserByEmail(email);
-  if (existingUser) {
-    return res.status(409).json({ message: 'User already exists' });
-  }
-
   // Check if referral code is valid
   let referrerId = null;
   if (referralCode) {
@@ -1518,6 +1512,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
