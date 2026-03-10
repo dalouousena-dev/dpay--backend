@@ -250,7 +250,7 @@ async function logTransaction(userId, type, amount, description = '') {
 }
 
 // --- auth endpoints ---
-  app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   const { email, password, username } = req.body;
 
   const existingUser = await getUserByEmail(email);
@@ -266,8 +266,6 @@ async function logTransaction(userId, type, amount, description = '') {
   });
 
 });   // ✅ REGISTER ROUTE ENDS HERE
-
-
 
 /* LOGIN ROUTE STARTS HERE */
 
@@ -286,7 +284,6 @@ app.post('/api/auth/login', async (req, res) => {
     userId: user.id
   });
 });
-  
   // Check if user already exists
   const existingUser = await getUserByEmail(email);
   if (existingUser) {
@@ -1509,6 +1506,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
