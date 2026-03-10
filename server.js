@@ -617,7 +617,8 @@ app.post('/api/plans/purchase', async (req, res) => {
       saveUsers();
 
       // Initiate NotchPay payment
-     const notchpayPayload = {
+ const paymentRef = `PLAN_${user.id}_${Date.now()}`;    
+      const notchpayPayload = {
   amount: amount,
   currency: 'XAF',
   reference: paymentRef,
@@ -640,12 +641,16 @@ app.post('/api/plans/purchase', async (req, res) => {
       console.log('   Reference:', paymentRef);
       console.log("Sending payload to NotchPay:", notchpayPayload);
       // Send request to NotchPay API
-      const notchpayResponse = await axios.post('https://api.notchpay.co/payments', notchpayPayload, {
-        headers: {
-          'Authorization': `Bearer ${notchpaySecretKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
+     const notchpayResponse = await axios.post(
+  'https://api.notchpay.co/payments/initialize',
+  notchpayPayload,
+  {
+    headers: {
+      Authorization: `Bearer ${notchpaySecretKey}`,
+      'Content-Type': 'application/json'
+    }
+  }
+);
 
       console.log('✅ NotchPay response received for reference:', paymentRef);
       
@@ -1532,6 +1537,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
