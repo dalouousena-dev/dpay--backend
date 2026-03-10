@@ -252,19 +252,36 @@ async function logTransaction(userId, type, amount, description = '') {
   }
 }
 
-// --- auth endpoints ---
+ // ✅ REGISTER ROUTE ENDS HERE
+
+/* LOGIN ROUTE STARTS HERE */
+
 app.post('/api/auth/register', async (req, res) => {
-  const { email, password, username } = req.body;
+
+  const { email, password, username, referralCode } = req.body;
 
   if (!email || !password || !username) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
   try {
+
     const existingUser = await getUserByEmail(email);
 
     if (existingUser) {
       return res.status(409).json({ message: "User already exists" });
+    }
+
+    let referrerId = null;
+
+    if (referralCode) {
+      const referrer = findUserByReferralCode(referralCode);
+
+      if (!referrer) {
+        return res.status(400).json({ message: "Invalid referral code" });
+      }
+
+      referrerId = referrer.id;
     }
 
     const newUser = {
@@ -273,49 +290,37 @@ app.post('/api/auth/register', async (req, res) => {
       password,
       username,
       token: makeToken(),
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      referral_code: makeReferralCode(),
+      referrer_id: referrerId,
+      referral_count: 0,
+      wallet_balance: 0
     };
 
-    await createUser(newUser);
+    const createdUser = await createUser(newUser);
+
+    if (referrerId) {
+      const referrer = users.find(u => u.id === referrerId);
+
+      if (referrer) {
+        referrer.referral_count = (referrer.referral_count || 0) + 1;
+        saveUsers();
+      }
+    }
 
     return res.status(201).json({
       message: "User created",
-      token: newUser.token,
-      userId: newUser.id
+      token: createdUser.token,
+      userId: createdUser.id
     });
 
   } catch (err) {
-    console.error("Register error:", err);
-    res.status(500).json({ message: "Registration failed" });
-  }
-});  // ✅ REGISTER ROUTE ENDS HERE
 
-/* LOGIN ROUTE STARTS HERE */
+    console.error("Registration error:", err);
+    return res.status(500).json({ message: "Registration failed" });
 
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Missing credentials' });
   }
 
-  try {
-    const user = await getUserByEmail(email);
-
-    if (!user || user.password !== password) {
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    return res.json({
-      message: "Login successful",
-      token: user.token,
-      userId: user.id
-    });
-
-  } catch (err) {
-    console.error("Login error:", err);
-    return res.status(500).json({ message: "Login failed" });
-  }
 });
   // Check if user already exists
 app.post('/api/auth/register', async (req, res) => {
@@ -1573,6 +1578,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
