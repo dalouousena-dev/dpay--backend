@@ -276,18 +276,18 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(400).json({ message: 'Missing credentials' });
   }
 
-  const user = await getUserByEmail(email);
+  try {
+    const user = await getUserByEmail(email);
 
-  if (!user || user.password !== password) {
-    return res.status(401).json({ message: 'Invalid email or password' });
-  }
+    if (!user || user.password !== password) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
 
-  return res.json({
-    message: "Login successful",
-    token: user.token,
-    userId: user.id
-  });
-});
+    return res.json({
+      message: "Login successful",
+      token: user.token,
+      userId: user.id
+    });
 
   } catch (err) {
     console.error("Login error:", err);
@@ -1516,6 +1516,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
