@@ -47,9 +47,10 @@ const notchpaySecretKey = fs
 const notchpayHashKey = process.env.NOTCHPAY_HASH_KEY;
 
 if (notchpaySecretKey) {
-  console.log("✅ NotchPay initialized with secret key");
-} else {
-  console.warn("⚠️ NotchPay secret key not found. Payments disabled.");
+ const notchpaySecretKey = process.env.NOTCHPAY_PRIVATE_KEY;
+
+if (!notchpaySecretKey) {
+  console.error("❌ NOTCHPAY_PRIVATE_KEY missing");
 }
 
 // ===== FILE-BASED STORAGE (Fallback) =====
@@ -633,15 +634,21 @@ console.log("Payment reference:", paymentRef);
 try {
 
   const notchpayPayload = {
-    amount: amount,
-    currency: 'XAF',
+    amount: Number(amount),
     reference: paymentRef,
-    customer: {
-      name: (user.first_name || user.firstName || '') + ' ' +
-            (user.last_name || user.lastName || ''),
-      email: user.email,
-      phone: user.phone_number || user.phoneNumber
-    },
+    
+const rawPhone = user.phone_number || user.phoneNumber || "";
+
+const phoneFormatted = rawPhone.startsWith("+237")
+  ? rawPhone
+  : `+237${rawPhone.replace(/^0/, "")}`;
+
+customer: {
+  name: (user.first_name || user.firstName || '') + ' ' +
+        (user.last_name || user.lastName || ''),
+  email: user.email,
+  phone: phoneFormatted
+},
     description: `Plan Purchase - ${planId}`,
     metadata: {
       userId: user.id,
@@ -698,7 +705,7 @@ try {
       // Return the payment URL and reference
       return res.json({
         message: 'Payment redirect required',
-        paymentUrl: notchpayResponse.data.data.authorization_url,
+        paymentUrl: notchpayResponse.data.authorization_url,
         paymentRef,
         amount: amount,
         planId: planId,
@@ -1578,6 +1585,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
