@@ -631,24 +631,25 @@ app.post('/api/plans/purchase', async (req, res) => {
 const paymentRef = `PLAN_${user.id}_${Date.now()}`;
 console.log("User ID:", user.id);
 console.log("Payment reference:", paymentRef);
+
 try {
+
+  const rawPhone = user.phone_number || user.phoneNumber || "";
+
+  const phoneFormatted = rawPhone.startsWith("+237")
+    ? rawPhone
+    : `+237${rawPhone.replace(/^0/, "")}`;
 
   const notchpayPayload = {
     amount: Number(amount),
+    currency: "XAF",
     reference: paymentRef,
-    
-const rawPhone = user.phone_number || user.phoneNumber || "";
-
-const phoneFormatted = rawPhone.startsWith("+237")
-  ? rawPhone
-  : `+237${rawPhone.replace(/^0/, "")}`;
-
-customer: {
-  name: (user.first_name || user.firstName || '') + ' ' +
-        (user.last_name || user.lastName || ''),
-  email: user.email,
-  phone: phoneFormatted
-},
+    customer: {
+      name: (user.first_name || user.firstName || '') + ' ' +
+            (user.last_name || user.lastName || ''),
+      email: user.email,
+      phone: phoneFormatted
+    },
     description: `Plan Purchase - ${planId}`,
     metadata: {
       userId: user.id,
@@ -1585,6 +1586,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
