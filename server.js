@@ -412,7 +412,9 @@ app.post('/api/auth/admin-login', (req, res) => {
 app.get('/api/users/profile', async (req, res) => {
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
-  
+
+  console.log("TOKEN RECEIVED:", token);
+
   try {
     let user;
     user = findUserByToken(token);
@@ -1568,6 +1570,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
