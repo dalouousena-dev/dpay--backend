@@ -617,9 +617,10 @@ app.post('/api/plans/purchase', async (req, res) => {
       saveUsers();
 
       // Initiate NotchPay payment
- const paymentRef = `PLAN_${user.id}_${Date.now()}`;
+const paymentRef = `PLAN_${user.id}_${Date.now()}`;
 
 try {
+
   const notchpayPayload = {
     amount: amount,
     currency: 'XAF',
@@ -637,8 +638,32 @@ try {
       originalAmount: amount
     }
   };
+
+  const notchpayResponse = await axios.post(
+    "https://api.notchpay.co/payments/initialize",
+    notchpayPayload,
+    {
+      headers: {
+        Authorization: `Bearer ${notchpaySecretKey}`,
+        "Content-Type": "application/json"
+      }
+    }
+  );
+
+  return res.json({
+    paymentUrl: notchpayResponse.data.authorization_url,
+    reference: paymentRef
+  });
+
+} catch (error) {
+
+  console.error("NotchPay initialization error:", error.response?.data || error.message);
+
+  return res.status(500).json({
+    message: "Failed to initialize payment"
+  });
+
 }
-catch(err) {}
 
       console.log('💳 Initiating NotchPay payment for user:', user.id);
       console.log('   Amount:', amount, 'FCFA');
@@ -1542,6 +1567,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
