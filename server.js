@@ -617,23 +617,28 @@ app.post('/api/plans/purchase', async (req, res) => {
       saveUsers();
 
       // Initiate NotchPay payment
- const paymentRef = `PLAN_${user.id}_${Date.now()}`;    
-      const notchpayPayload = {
-  amount: amount,
-  currency: 'XAF',
-  reference: paymentRef,
-  customer: {
-    name: (user.first_name || user.firstName || '') + ' ' + (user.last_name || user.lastName || ''),
-    email: user.email,
-    phone: user.phone_number || user.phoneNumber
-  },
-  description: `Plan Purchase - ${planId}`,
-  metadata: {
-    userId: user.id,
-    planId,
-    originalAmount: amount
-  }
-};
+ const paymentRef = `PLAN_${user.id}_${Date.now()}`;
+
+try {
+  const notchpayPayload = {
+    amount: amount,
+    currency: 'XAF',
+    reference: paymentRef,
+    customer: {
+      name: (user.first_name || user.firstName || '') + ' ' +
+            (user.last_name || user.lastName || ''),
+      email: user.email,
+      phone: user.phone_number || user.phoneNumber
+    },
+    description: `Plan Purchase - ${planId}`,
+    metadata: {
+      userId: user.id,
+      planId,
+      originalAmount: amount
+    }
+  };
+}
+catch(err) {}
 
       console.log('💳 Initiating NotchPay payment for user:', user.id);
       console.log('   Amount:', amount, 'FCFA');
@@ -1537,6 +1542,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
