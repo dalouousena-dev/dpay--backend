@@ -618,7 +618,8 @@ app.post('/api/plans/purchase', async (req, res) => {
 
       // Initiate NotchPay payment
 const paymentRef = `PLAN_${user.id}_${Date.now()}`;
-
+console.log("User ID:", user.id);
+console.log("Payment reference:", paymentRef);
 try {
 
   const notchpayPayload = {
@@ -1567,6 +1568,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
