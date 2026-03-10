@@ -38,14 +38,22 @@ if (supabaseUrl && supabaseKey) {
 }
 
 /* ===== NOTCHPAY INITIALIZATION ===== */
+const NotchPay = require("@notchpay/notchpay");
+
+let notchpay = null;
+
 const notchpayPublicKey = process.env.NOTCHPAY_PUBLIC_KEY;
 const notchpaySecretKey = process.env.NOTCHPAY_SECRET_KEY;
 const notchpayHashKey = process.env.NOTCHPAY_HASH_KEY;
 
-if (notchpayPublicKey && notchpaySecretKey) {
-  console.log('✅ NotchPay initialized with public key');
+if (notchpaySecretKey) {
+  notchpay = new NotchPay({
+    secretKey: notchpaySecretKey
+  });
+
+  console.log("✅ NotchPay initialized with secret key");
 } else {
-  console.warn('⚠️ NotchPay credentials not found. Debit card payments will be disabled.');
+  console.warn("⚠️ NotchPay secret key not found. Payments disabled.");
 }
 
 // ===== FILE-BASED STORAGE (Fallback) =====
@@ -347,18 +355,6 @@ app.post('/api/auth/admin-login', (req, res) => {
     res.status(500).json({ message: "Server error during admin login" });
   }
 });
-
-app.post('/api/auth/admin-login', (req, res) => {
-  const { email, password } = req.body;
-  // hard-coded admin credentials for demo
-  if (email === 'dpay@gmail.com' && password === '693288582') {
-    adminToken = makeToken();
-    saveAdminToken();
-    return res.json({ token: adminToken });
-  }
-  return res.status(401).json({ message: 'Invalid admin credentials' });
-});
-
 // --- user/profile and transactions ---
 
 app.get('/api/users/profile', async (req, res) => {
@@ -569,23 +565,22 @@ app.post('/api/plans/purchase', async (req, res) => {
       saveUsers();
 
       // Initiate NotchPay payment
-      const paymentRef = `PLAN_${user.id}_${Date.now()}`;
-      const notchpayPayload = {
-        amount: Math.round(amount * 100), // Convert to cents
-        currency: 'XAF', // Cameroon currency
-        reference: paymentRef,
-        customer: {
-          name: (user.first_name || user.firstName || '') + ' ' + (user.last_name || user.lastName || ''),
-          email: user.email,
-          phone: user.phone_number || user.phoneNumber
-        },
-        description: `Plan Purchase - ${planId}`,
-        metadata: {
-          userId: user.id,
-          planId,
-          originalAmount: amount
-        }
-      };
+     const notchpayPayload = {
+  amount: amount,
+  currency: 'XAF',
+  reference: paymentRef,
+  customer: {
+    name: (user.first_name || user.firstName || '') + ' ' + (user.last_name || user.lastName || ''),
+    email: user.email,
+    phone: user.phone_number || user.phoneNumber
+  },
+  description: `Plan Purchase - ${planId}`,
+  metadata: {
+    userId: user.id,
+    planId,
+    originalAmount: amount
+  }
+};
 
       console.log('💳 Initiating NotchPay payment for user:', user.id);
       console.log('   Amount:', amount, 'FCFA (', Math.round(amount * 100), 'cents)');
@@ -1485,6 +1480,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
