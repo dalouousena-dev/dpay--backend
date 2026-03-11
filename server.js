@@ -677,7 +677,6 @@ app.post('/api/plans/purchase', async (req, res) => {
         }
       };
 app.post('/api/payments/initialize', async (req, res) => {
-
   try {
 
     const notchpayResponse = await axios.post(
@@ -691,38 +690,18 @@ app.post('/api/payments/initialize', async (req, res) => {
       }
     );
 
-    res.json(notchpayResponse.data);
+    return res.json(notchpayResponse.data);
 
   } catch (error) {
-    console.error(error);
-  }
 
-});   // correct closing
-      console.log("✅ NotchPay initialized:", paymentRef);
+    console.error("NOTCHPAY ERROR:", error);
 
-      return res.json({
-        message: "Payment redirect required",
-        paymentUrl: notchpayResponse.data.authorization_url,
-        paymentRef,
-        amount,
-        planId,
-        pending: true
-      });
-
-    } catch (error) {
-
-      console.error(
-        "NotchPay initialization error:",
-        error.response?.data || error.message
-      );
-
-      return res.status(500).json({
-        message: "Failed to initialize payment"
-      });
-
-    }
+    return res.status(500).json({
+      message: "Failed to initialize payment"
+    });
 
   }
+});}
 
   /* =========================
      MOBILE MONEY / DIRECT
@@ -1621,6 +1600,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
 });
+
 
 
 
