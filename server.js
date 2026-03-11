@@ -559,42 +559,72 @@ app.get('/api/referral/code', async (req, res) => {
 });
 
 // --- plan purchase endpoints ---
-
 app.post('/api/plans/purchase', async (req, res) => {
-  console.log('Received plan purchase request', req.body);
+  try {
 
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
+    console.log('Received plan purchase request:', req.body);
 
-  let user = findUserByToken(token);
+    const auth = req.headers.authorization;
 
-  if (!user) {
-    return res.status(401).json({ message: 'Invalid or missing token' });
-  }
-
-  const { planId, amount, paymentMethod } = req.body;
-
-  if (!planId || !amount) {
-    return res.status(400).json({ message: 'Missing plan details' });
-  }
-
-  const now = new Date();
-
-  /* =========================
-     NOTCHPAY PAYMENT
-  ========================= */
-
-  if (
-    paymentMethod === 'Debit Card' ||
-    paymentMethod === 'Debit' ||
-    paymentMethod === 'debit'
-  ) {
-
-    if (!notchpaySecretKey || !notchpayPublicKey) {
-      return res.status(500).json({
-        message: 'NotchPay is not configured'
-      });
+    if (!auth || !auth.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Invalid or missing token' });
     }
+
+    const token = auth.split(' ')[1];
+
+    const user = findUserByToken(token);
+
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid or missing token' });
+    }
+
+    const { planId, amount, paymentMethod } = req.body;
+
+    if (!planId || !amount) {
+      return res.status(400).json({ message: 'Missing plan details' });
+    }
+
+    const now = new Date();
+
+    // Ensure user plans array exists
+    user.plans = user.plans || [];
+
+    const newPlan = {
+      planId,
+      amount,
+      paymentMethod,
+      startDate: now,
+      status: "active"
+    };
+
+    user.plans.push(newPlan);
+
+    // Ensure notifications array exists
+    user.notifications = user.notifications || [];
+
+    user.notifications.push({
+      message: `Plan ${planId} activated successfully`,
+      date: now
+    });
+
+    console.log("Plan activated for user:", user.email);
+
+    return res.json({
+      success: true,
+      message: "Plan activated successfully",
+      plan: newPlan
+    });
+
+  } catch (error) {
+
+    console.error("PURCHASE ERROR:", error);
+
+    return res.status(500).json({
+      message: "Server error while activating plan"
+    });
+  }
+});
+
 
     try {
 
@@ -971,7 +1001,9 @@ app.get('/api/notifications', (req, res) => {
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
   const user = findUserByToken(token);
+
   if (!user) return res.status(401).json({ message: 'Invalid or missing token' });
+
   res.json({ notifications: user.notifications || [] });
 });
 
@@ -1568,6 +1600,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
 });
+
 
 
 
