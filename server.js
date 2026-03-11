@@ -694,14 +694,14 @@ app.post('/api/payments/initialize', async (req, res) => {
 
   } catch (error) {
 
-    console.error("NOTCHPAY ERROR:", error);
+    console.error("NOTCHPAY ERROR:", error.response?.data || error.message);
 
     return res.status(500).json({
       message: "Failed to initialize payment"
     });
 
   }
-});}
+});
 
   /* =========================
      MOBILE MONEY / DIRECT
@@ -1597,6 +1597,7 @@ app.post('/api/auth/login', async (req, res) => {
       message: "Login failed"
     }
 });
+
 
 
 
