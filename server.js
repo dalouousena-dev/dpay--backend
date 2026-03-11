@@ -564,14 +564,16 @@ app.post('/api/plans/purchase', async (req, res) => {
 
     console.log('Received plan purchase request:', req.body);
 
-    const auth = req.headers.authorization;
+    // Get authorization header
+    const authHeader = req.headers.authorization;
 
-    if (!auth || !auth.startsWith('Bearer ')) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ message: 'Invalid or missing token' });
     }
 
-    const token = auth.split(' ')[1];
+    const token = authHeader.split(' ')[1];
 
+    // Find user
     const user = findUserByToken(token);
 
     if (!user) {
@@ -584,15 +586,23 @@ app.post('/api/plans/purchase', async (req, res) => {
       return res.status(400).json({ message: 'Missing plan details' });
     }
 
+    const numericAmount = Number(amount);
+
+    if (isNaN(numericAmount)) {
+      return res.status(400).json({ message: 'Invalid amount' });
+    }
+
     const now = new Date();
 
-    // Ensure user plans array exists
-    user.plans = user.plans || [];
+    // Ensure plans array exists
+    if (!user.plans) {
+      user.plans = [];
+    }
 
     const newPlan = {
       planId,
-      amount,
-      paymentMethod,
+      amount: numericAmount,
+      paymentMethod: paymentMethod || "unknown",
       startDate: now,
       status: "active"
     };
@@ -600,14 +610,16 @@ app.post('/api/plans/purchase', async (req, res) => {
     user.plans.push(newPlan);
 
     // Ensure notifications array exists
-    user.notifications = user.notifications || [];
+    if (!user.notifications) {
+      user.notifications = [];
+    }
 
     user.notifications.push({
       message: `Plan ${planId} activated successfully`,
       date: now
     });
 
-    console.log("Plan activated for user:", user.email);
+    console.log(`Plan ${planId} activated for user:`, user.email);
 
     return res.json({
       success: true,
@@ -624,7 +636,6 @@ app.post('/api/plans/purchase', async (req, res) => {
     });
   }
 });
-
 
     try {
 
@@ -1600,6 +1611,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
 });
+
 
 
 
