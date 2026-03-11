@@ -1550,7 +1550,8 @@ app.get("/", (req, res) => {
 app.use((err, req, res, next) => {
   console.error("🔥 Server error:", err);
   res.status(500).json({ message: "Internal server error" });
- }); 
+});
+
 app.listen(PORT, () => {
   console.log("====================================");
   console.log(`🚀 DPAY backend running on port ${PORT}`);
@@ -1595,8 +1596,12 @@ app.post('/api/auth/login', async (req, res) => {
 
     return res.status(500).json({
       message: "Login failed"
-    }
+    });
+
+  }
+
 });
+
 
 
 
