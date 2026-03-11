@@ -636,6 +636,14 @@ app.post('/api/plans/purchase', async (req, res) => {
     });
   }
 });
+const auth = req.headers.authorization || "";
+const token = auth.replace("Bearer ", "");
+
+const user = findUserByToken(token);
+
+if (!user) {
+  return res.status(401).json({ message: "Invalid or missing token" });
+}
 
   try {
 
@@ -1613,6 +1621,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
