@@ -392,7 +392,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-app.post('/api/auth/admin-login', (req, res) => {
+app.post('/api/auth/admin-login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
 
@@ -1241,7 +1241,7 @@ app.post('/api/products/sell', async (req, res) => {
 
 // --- withdrawal endpoints ---
 
-app.post('/api/users/request-withdrawal', (req, res) => {
+app.post('/api/users/request-withdrawal', async (req, res) => {
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
   const user = findUserByToken(token);
@@ -1615,6 +1615,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
