@@ -729,7 +729,6 @@ app.post('/api/plans/purchase', async (req, res) => {
         error: error.response?.data?.message || error.message 
       });
     }
-  }
 
   // Otherwise assume instant activation (mobile money - Orange Money or MTN)
   user.walletBalance = (user.walletBalance || 0) + amount;
@@ -1596,6 +1595,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
