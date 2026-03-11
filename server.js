@@ -676,7 +676,7 @@ app.post('/api/plans/purchase', async (req, res) => {
           originalAmount: amount
         }
       };
-app.post('/api/payments/initialize', (req, res) => {
+app.post('/api/payments/initialize', async (req, res) => {
 
   const notchpayResponse = await axios.post(
     "https://api.notchpay.co/payments/initialize",
@@ -1614,6 +1614,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
 });
+
 
 
 
