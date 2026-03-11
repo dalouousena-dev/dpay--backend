@@ -750,7 +750,7 @@ try {
 
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
-app.post('/api/payments/verify', (req, res) => {
+app.post('/api/payments/verify', async (req, res) => {
   const { userId, paymentId } = req.body;
   if (!userId || !paymentId) return res.status(400).json({ message: 'Missing parameters' });
   const user = users.find(u => u.id === userId);
@@ -1114,7 +1114,7 @@ function getVipBenefits(planId) {
 }
 
 // endpoint for purchasing a product
-app.post('/api/products/buy', (req, res) => {
+app.post('/api/products/buy', async (req, res) => {
   console.log('Received product purchase request', req.body);
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
@@ -1192,7 +1192,7 @@ app.post('/api/products/buy', (req, res) => {
 });
 
 // endpoint for selling a product back to platform
-app.post('/api/products/sell', (req, res) => {
+app.post('/api/products/sell', async (req, res) => {
   console.log('Received product sell request', req.body);
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
@@ -1615,6 +1615,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
