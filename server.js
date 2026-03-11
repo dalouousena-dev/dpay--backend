@@ -1544,19 +1544,8 @@ app.get("/", (req, res) => {
 });
 
 /* ===============================
-   START SERVER
+   AUTH LOGIN
 ================================ */
-app.use((err, req, res, next) => {
-  console.error("🔥 Server error:", err);
-  res.status(500).json({ message: "Internal server error" });
-});
-
-app.listen(PORT, () => {
-  console.log("====================================");
-  console.log(`🚀 DPAY backend running on port ${PORT}`);
-  console.log("====================================");
-});
-
 app.post('/api/auth/login', async (req, res) => {
 
   const { email, password } = req.body;
@@ -1600,6 +1589,24 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
 });
+
+/* ===============================
+   GLOBAL ERROR HANDLER
+================================ */
+app.use((err, req, res, next) => {
+  console.error("🔥 Server error:", err);
+  res.status(500).json({ message: "Internal server error" });
+});
+
+/* ===============================
+   START SERVER
+================================ */
+app.listen(PORT, () => {
+  console.log("====================================");
+  console.log(`🚀 DPAY backend running on port ${PORT}`);
+  console.log("====================================");
+});
+
 
 
 
