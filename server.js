@@ -746,8 +746,6 @@ try {
     walletBalance: user.walletBalance
   });
 
-});
-
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
 app.post('/api/payments/verify', async (req, res) => {
@@ -1615,6 +1613,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
