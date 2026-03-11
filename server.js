@@ -678,19 +678,26 @@ app.post('/api/plans/purchase', async (req, res) => {
       };
 app.post('/api/payments/initialize', async (req, res) => {
 
-  const notchpayResponse = await axios.post(
-    "https://api.notchpay.co/payments/initialize",
-    notchpayPayload,
-    {
-      headers: {
-        Authorization: `Bearer ${notchpaySecretKey}`,
-        "Content-Type": "application/json"
+  try {
+
+    const notchpayResponse = await axios.post(
+      "https://api.notchpay.co/payments/initialize",
+      notchpayPayload,
+      {
+        headers: {
+          Authorization: `Bearer ${notchpaySecretKey}`,
+          "Content-Type": "application/json"
+        }
       }
-    }
-  );
+    );
 
-});
+    res.json(notchpayResponse.data);
 
+  } catch (error) {
+    console.error(error);
+  }
+
+});   // correct closing
       console.log("✅ NotchPay initialized:", paymentRef);
 
       return res.json({
@@ -1614,6 +1621,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
 });
+
 
 
 
