@@ -636,67 +636,56 @@ app.post('/api/plans/purchase', async (req, res) => {
     });
   }
 });
+
 app.post('/api/plans/purchase', async (req, res) => {
-const auth = req.headers.authorization || "";
-const token = auth.replace("Bearer ", "");
-
-const user = findUserByToken(token);
-
-if (!user) {
-  return res.status(401).json({ message: "Invalid or missing token" });
-}
-
   try {
+    const auth = req.headers.authorization || "";
+    const token = auth.replace("Bearer ", "");
 
-  user.pendingPurchase = {
-    planId,
-    amount,
-    paymentMethod: 'Debit Card',
-    createdAt: now.toISOString(),
-    verified: false
-  };
+    const user = findUserByToken(token);
 
-  saveUsers();
-
-  const paymentRef = `PLAN_${user.id}_${Date.now()}`;
-
-  const rawPhone = user.phone_number || user.phoneNumber || "";
-
-  const phoneFormatted = rawPhone.startsWith("+237")
-    ? rawPhone
-    : `+237${rawPhone.replace(/^0/, "")}`;
-
-  const notchpayPayload = {
-    amount: Number(amount),
-    currency: "XAF",
-    reference: paymentRef,
-    customer: {
-      name:
-        (user.first_name || user.firstName || "") +
-        " " +
-        (user.last_name || user.lastName || ""),
-      email: user.email,
-      phone: phoneFormatted
-    },
-    description: `Plan Purchase - ${planId}`,
-    metadata: {
-      userId: user.id,
-      planId,
-      originalAmount: amount
+    if (!user) {
+      return res.status(401).json({ message: "Invalid or missing token" });
     }
-  };
 
-} catch (error) {
+    const { planId, amount } = req.body;
+    const now = new Date();
 
-  console.error("Payment initialization error:", error);
+    user.pendingPurchase = {
+      planId,
+      amount,
+      paymentMethod: "Debit Card",
+      createdAt: now.toISOString(),
+      verified: false
+    };
 
-  return res.status(500).json({
-    message: "Failed to initialize payment"
-  });
+    saveUsers();
 
-}
-app.post('/api/payments/initialize', async (req, res) => {
-try {
+    const paymentRef = `PLAN_${user.id}_${Date.now()}`;
+
+    const rawPhone = user.phone_number || user.phoneNumber || "";
+
+    const phoneFormatted = rawPhone.startsWith("+237")
+      ? rawPhone
+      : `+237${rawPhone.replace(/^0/, "")}`;
+
+    const notchpayPayload = {
+      amount: Number(amount),
+      currency: "XAF",
+      reference: paymentRef,
+      customer: {
+        name: `${user.first_name || ""} ${user.last_name || ""}`,
+        email: user.email,
+        phone: phoneFormatted
+      },
+      description: `Plan Purchase - ${planId}`,
+      metadata: {
+        userId: user.id,
+        planId,
+        originalAmount: amount
+      }
+    };
+
     const notchpayResponse = await axios.post(
       "https://api.notchpay.co/payments/initialize",
       notchpayPayload,
@@ -708,16 +697,17 @@ try {
       }
     );
 
-    return res.json(notchpayResponse.data);
+    return res.json({
+      message: "Payment initialized",
+      payment: notchpayResponse.data
+    });
 
   } catch (error) {
-
-    console.error("NOTCHPAY ERROR:", error.response?.data || error.message);
+    console.error("Payment initialization error:", error);
 
     return res.status(500).json({
       message: "Failed to initialize payment"
     });
-
   }
 });
   /* =========================
@@ -1622,6 +1612,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
