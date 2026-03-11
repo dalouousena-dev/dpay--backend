@@ -581,7 +581,12 @@ app.post('/api/plans/purchase', async (req, res) => {
     }
 
     const { planId, amount, paymentMethod } = req.body;
+  user.walletBalance = (user.walletBalance || 0) + amount;
+  user.activePlan = planId;
+  user.totalDeposited = (user.totalDeposited || 0) + amount;
+  saveUsers();
 
+    
     if (!planId || !amount) {
       return res.status(400).json({ message: 'Missing plan details' });
     }
@@ -714,36 +719,62 @@ app.post('/api/plans/purchase', async (req, res) => {
      MOBILE MONEY / DIRECT
   ========================= */
 
-  user.walletBalance = (user.walletBalance || 0) + amount;
-  user.activePlan = planId;
-  user.totalDeposited = (user.totalDeposited || 0) + amount;
+app.post('/api/plans/purchase', async (req, res) => {
+  try {
 
-  const withdrawalDate = new Date(
-    now.getTime() + 30 * 24 * 60 * 60 * 1000
-  );
+    const auth = req.headers.authorization || "";
+    const token = auth.replace("Bearer ", "");
 
-  user.withdrawalAvailableAt = withdrawalDate.toISOString();
-  user.lastTransactionDate = now.toISOString();
+    const user = findUserByToken(token);
 
-  user.transactions = user.transactions || [];
+    if (!user) {
+      return res.status(401).json({ message: "Invalid or missing token" });
+    }
 
-  user.transactions.push({
-    id: crypto.randomBytes(8).toString('hex'),
-    type: 'plan_purchase',
-    planId,
-    amount,
-    paymentMethod,
-    at: now.toISOString()
-  });
+    const { planId, amount, paymentMethod } = req.body;
+    const now = new Date();
 
-  saveUsers();
+    user.walletBalance = (user.walletBalance || 0) + amount;
+    user.activePlan = planId;
+    user.totalDeposited = (user.totalDeposited || 0) + amount;
 
-  return res.json({
-    message: 'Plan purchased successfully',
-    withdrawalAvailableAt: user.withdrawalAvailableAt,
-    activePlan: user.activePlan,
-    walletBalance: user.walletBalance
-  });
+    const withdrawalDate = new Date(
+      now.getTime() + 30 * 24 * 60 * 60 * 1000
+    );
+
+    user.withdrawalAvailableAt = withdrawalDate.toISOString();
+    user.lastTransactionDate = now.toISOString();
+
+    user.transactions = user.transactions || [];
+
+    user.transactions.push({
+      id: crypto.randomBytes(8).toString('hex'),
+      type: 'plan_purchase',
+      planId,
+      amount,
+      paymentMethod,
+      at: now.toISOString()
+    });
+
+    saveUsers();
+
+    return res.json({
+      message: 'Plan purchased successfully',
+      withdrawalAvailableAt: user.withdrawalAvailableAt,
+      activePlan: user.activePlan,
+      walletBalance: user.walletBalance
+    });
+
+  } catch (error) {
+
+    console.error("Plan purchase error:", error);
+
+    return res.status(500).json({
+      message: "Server error while purchasing plan"
+    });
+
+  }
+});
 
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
@@ -1612,6 +1643,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
