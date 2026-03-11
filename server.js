@@ -636,6 +636,7 @@ app.post('/api/plans/purchase', async (req, res) => {
     });
   }
 });
+app.post('/api/plans/purchase', async (req, res) => {
 const auth = req.headers.authorization || "";
 const token = auth.replace("Bearer ", "");
 
@@ -1621,6 +1622,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
