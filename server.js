@@ -658,20 +658,20 @@ app.post('/api/plans/purchase', async (req, res) => {
       originalAmount: amount,
     },
   };
-try{
-  
+try {
+
   const notchpayResponse = await axios.post(
     "https://api.notchpay.co/payments/initialize",
     notchpayPayload,
     {
       headers: {
         Authorization: `Bearer ${notchpaySecretKey}`,
-        "Content-Type": "application/json",
-      },
+        "Content-Type": "application/json"
+      }
     }
   );
 
-  console.log("✅ NotchPay response received for reference:", paymentRef);
+  console.log("✅ NotchPay response received:", paymentRef);
 
   return res.json({
     message: "Payment redirect required",
@@ -679,7 +679,7 @@ try{
     paymentRef,
     amount,
     planId,
-    pending: true,
+    pending: true
   });
 
 } catch (error) {
@@ -691,7 +691,7 @@ try{
 
   return res.status(500).json({
     message: "Failed to initialize payment",
-    error: error.response?.data?.message || error.message,
+    error: error.response?.data?.message || error.message
   });
 
 }
@@ -1561,6 +1561,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
