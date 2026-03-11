@@ -616,23 +616,23 @@ app.post('/api/plans/purchase', async (req, res) => {
       return res.status(500).json({ message: 'NotchPay is not configured. Please contact support.' });
     }
 
-    try {
-      // Create a pending purchase record
-      user.pendingPurchase = {
-        planId,
-        amount,
-        paymentMethod: 'Debit Card',
-        createdAt: now.toISOString(),
-        verified: false,
-      };
-      saveUsers();
+   try {
 
-      // Initiate NotchPay payment
-const paymentRef = `PLAN_${user.id}_${Date.now()}`;
-console.log("User ID:", user.id);
-console.log("Payment reference:", paymentRef);
+  // Create a pending purchase record
+  user.pendingPurchase = {
+    planId,
+    amount,
+    paymentMethod: 'Debit Card',
+    createdAt: now.toISOString(),
+    verified: false,
+  };
 
-try {
+  saveUsers();
+
+  // Initiate NotchPay payment
+  const paymentRef = `PLAN_${user.id}_${Date.now()}`;
+  console.log("User ID:", user.id);
+  console.log("Payment reference:", paymentRef);
 
   const rawPhone = user.phone_number || user.phoneNumber || "";
 
@@ -676,14 +676,16 @@ try {
 
 } catch (error) {
 
-  console.error("NotchPay initialization error:", error.response?.data || error.message);
+  console.error(
+    "NotchPay initialization error:",
+    error.response?.data || error.message
+  );
 
   return res.status(500).json({
     message: "Failed to initialize payment"
   });
 
 }
-
       console.log('💳 Initiating NotchPay payment for user:', user.id);
       console.log('   Amount:', amount, 'FCFA');
       console.log('   Plan:', planId);
@@ -1586,6 +1588,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
