@@ -1174,8 +1174,6 @@ app.post('/api/products/buy', async (req, res) => {
       return res.status(429).json({ message: 'Next purchase window not yet open', retryAfterMs: diff, nextPurchaseWindowEnds: user.nextPurchaseWindowEnds });
     }
   }
-
-  const balance = user.walletBalance || 0;
   
   // Apply VIP purchase discount
   const vipBenefits = getVipBenefits(user.activePlan);
@@ -1643,6 +1641,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
