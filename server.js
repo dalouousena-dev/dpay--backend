@@ -46,9 +46,6 @@ const notchpaySecretKey = fs
   .trim();
 const notchpayHashKey = process.env.NOTCHPAY_HASH_KEY;
 
-if (notchpaySecretKey) {
- const notchpaySecretKey = process.env.NOTCHPAY_PRIVATE_KEY;
-
 if (!notchpaySecretKey) {
   console.error("❌ NOTCHPAY_PRIVATE_KEY missing");
 }
@@ -403,7 +400,10 @@ app.post('/api/auth/admin-login', (req, res) => {
       return res.status(400).json({ message: "Missing credentials" });
     }
 
-    if (email === "dpay@gmail.com" && password === "693288582") {
+    if (
+ email === process.env.ADMIN_EMAIL &&
+ password === process.env.ADMIN_PASSWORD
+) {
       adminToken = makeToken();
       saveAdminToken();
       return res.json({ token: adminToken });
@@ -694,42 +694,7 @@ app.post('/api/plans/purchase', async (req, res) => {
   });
 
 }
-      console.log('💳 Initiating NotchPay payment for user:', user.id);
-      console.log('   Amount:', amount, 'FCFA');
-      console.log('   Plan:', planId);
-      console.log('   Reference:', paymentRef);
-      console.log("Sending payload to NotchPay:", notchpayPayload);
-      // Send request to NotchPay API
-     const notchpayResponse = await axios.post(
-  'https://api.notchpay.co/payments/initialize',
-  notchpayPayload,
-  {
-    headers: {
-      Authorization: `Bearer ${notchpaySecretKey}`,
-      'Content-Type': 'application/json'
-    }
-  }
-);
-try {
-      console.log('✅ NotchPay response received for reference:', paymentRef);
-      
-      // Return the payment URL and reference
-      return res.json({
-        message: 'Payment redirect required',
-        paymentUrl: notchpayResponse.data.authorization_url,
-        paymentRef,
-        amount: amount,
-        planId: planId,
-        pending: true
-      });
-    } catch (error) {
-      console.error('NotchPay initialization error:', error.response?.data || error.message);
-      return res.status(500).json({ 
-        message: 'Failed to initialize payment',
-        error: error.response?.data?.message || error.message 
-      });
-    }
-
+     
   // Otherwise assume instant activation (mobile money - Orange Money or MTN)
   user.walletBalance = (user.walletBalance || 0) + amount;
   user.activePlan = planId;
@@ -1595,6 +1560,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
