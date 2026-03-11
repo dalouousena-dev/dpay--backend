@@ -616,7 +616,7 @@ app.post('/api/plans/purchase', async (req, res) => {
       return res.status(500).json({ message: 'NotchPay is not configured. Please contact support.' });
     }
 
-   try {
+  try {
 
   // Create a pending purchase record
   user.pendingPurchase = {
@@ -629,7 +629,6 @@ app.post('/api/plans/purchase', async (req, res) => {
 
   saveUsers();
 
-  // Initiate NotchPay payment
   const paymentRef = `PLAN_${user.id}_${Date.now()}`;
   console.log("User ID:", user.id);
   console.log("Payment reference:", paymentRef);
@@ -645,17 +644,19 @@ app.post('/api/plans/purchase', async (req, res) => {
     currency: "XAF",
     reference: paymentRef,
     customer: {
-      name: (user.first_name || user.firstName || '') + ' ' +
-            (user.last_name || user.lastName || ''),
+      name:
+        (user.first_name || user.firstName || "") +
+        " " +
+        (user.last_name || user.lastName || ""),
       email: user.email,
-      phone: phoneFormatted
+      phone: phoneFormatted,
     },
     description: `Plan Purchase - ${planId}`,
     metadata: {
       userId: user.id,
       planId,
-      originalAmount: amount
-    }
+      originalAmount: amount,
+    },
   };
 
   const notchpayResponse = await axios.post(
@@ -664,14 +665,20 @@ app.post('/api/plans/purchase', async (req, res) => {
     {
       headers: {
         Authorization: `Bearer ${notchpaySecretKey}`,
-        "Content-Type": "application/json"
-      }
+        "Content-Type": "application/json",
+      },
     }
   );
 
+  console.log("✅ NotchPay response received for reference:", paymentRef);
+
   return res.json({
+    message: "Payment redirect required",
     paymentUrl: notchpayResponse.data.authorization_url,
-    reference: paymentRef
+    paymentRef,
+    amount,
+    planId,
+    pending: true,
   });
 
 } catch (error) {
@@ -682,7 +689,8 @@ app.post('/api/plans/purchase', async (req, res) => {
   );
 
   return res.status(500).json({
-    message: "Failed to initialize payment"
+    message: "Failed to initialize payment",
+    error: error.response?.data?.message || error.message,
   });
 
 }
@@ -1588,6 +1596,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
