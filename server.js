@@ -710,7 +710,7 @@ app.post('/api/plans/purchase', async (req, res) => {
     }
   }
 );
-
+try {
       console.log('✅ NotchPay response received for reference:', paymentRef);
       
       // Return the payment URL and reference
@@ -1595,6 +1595,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
