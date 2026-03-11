@@ -1525,6 +1525,50 @@ app.listen(PORT, () => {
   console.log("====================================");
 });
 
+app.post('/api/auth/login', async (req, res) => {
+
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ message: "Missing credentials" });
+  }
+
+  try {
+
+    let user = await getUserByEmail(email);
+
+    if (!user) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    if (user.password !== password) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    // generate new session token
+    const newToken = makeToken();
+    user.token = newToken;
+
+    await updateUser(user.id, { token: newToken });
+
+    return res.json({
+      message: "Login successful",
+      token: newToken,
+      userId: user.id
+    });
+
+  } catch (err) {
+
+    console.error("Login error:", err);
+
+    return res.status(500).json({
+      message: "Login failed"
+    });
+
+  }
+
+});
+
 
 
 
