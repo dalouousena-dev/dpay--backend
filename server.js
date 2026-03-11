@@ -676,7 +676,7 @@ app.post('/api/plans/purchase', async (req, res) => {
           originalAmount: amount
         }
       };
-app.post('/api/payments/initialize', async (req, res) => {
+app.post('/api/payments/initialize', async (req, res)app.post('/api/payments/initialize', async (req, res) => {
   try {
 
     const notchpayResponse = await axios.post(
@@ -1606,6 +1606,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
