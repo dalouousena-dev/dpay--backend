@@ -562,42 +562,66 @@ app.get('/api/referral/code', async (req, res) => {
 app.post('/api/plans/purchase', async (req, res) => {
   try {
 
-    // Get authorization header
-    const authHeader = req.headers.authorization;
+    // Get Authorization header safely
+    const authHeader = req.headers.authorization || "";
 
-    // Validate header
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Missing authorization token" });
+    console.log("Authorization header:", authHeader); // Debug
+
+    // Check if header exists
+    if (!authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        message: "Authorization token missing or invalid"
+      });
     }
 
     // Extract token
-    const token = authHeader.split(" ")[1];
+    const token = authHeader.replace("Bearer ", "").trim();
 
     if (!token) {
-      return res.status(401).json({ message: "Invalid token format" });
+      return res.status(401).json({
+        message: "Token extraction failed"
+      });
     }
 
     // Find user
     const user = findUserByToken(token);
 
     if (!user) {
-      return res.status(401).json({ message: "Invalid token or user not found" });
+      return res.status(401).json({
+        message: "Invalid token or user not found"
+      });
     }
 
     const { planId, amount, paymentMethod } = req.body;
 
     if (!planId || !amount) {
-      return res.status(400).json({ message: "planId and amount are required" });
+      return res.status(400).json({
+        message: "planId and amount are required"
+      });
     }
 
     const now = new Date();
 
-    // Update wallet
-    user.walletBalance = (user.walletBalance || 0) + amount;
-    user.activePlan = planId;
-    user.totalDeposited = (user.totalDeposited || 0) + amount;
+    // Ensure numeric amount
+    const numericAmount = Number(amount);
 
-    // Withdrawal date (30 days)
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({
+        message: "Invalid amount"
+      });
+    }
+
+    // Initialize fields if missing
+    user.walletBalance = user.walletBalance || 0;
+    user.totalDeposited = user.totalDeposited || 0;
+    user.transactions = user.transactions || [];
+
+    // Update wallet
+    user.walletBalance += numericAmount;
+    user.activePlan = planId;
+    user.totalDeposited += numericAmount;
+
+    // Withdrawal after 30 days
     const withdrawalDate = new Date(
       now.getTime() + 30 * 24 * 60 * 60 * 1000
     );
@@ -605,24 +629,25 @@ app.post('/api/plans/purchase', async (req, res) => {
     user.withdrawalAvailableAt = withdrawalDate.toISOString();
     user.lastTransactionDate = now.toISOString();
 
-    user.transactions = user.transactions || [];
-
+    // Save transaction
     user.transactions.push({
       id: crypto.randomBytes(8).toString('hex'),
       type: 'plan_purchase',
       planId,
-      amount,
-      paymentMethod,
+      amount: numericAmount,
+      paymentMethod: paymentMethod || "unknown",
       at: now.toISOString()
     });
 
+    // Save users database
     saveUsers();
 
-    return res.json({
-      message: 'Plan purchased successfully',
-      withdrawalAvailableAt: user.withdrawalAvailableAt,
+    return res.status(200).json({
+      success: true,
+      message: "Plan purchased successfully",
       activePlan: user.activePlan,
-      walletBalance: user.walletBalance
+      walletBalance: user.walletBalance,
+      withdrawalAvailableAt: user.withdrawalAvailableAt
     });
 
   } catch (error) {
@@ -635,7 +660,6 @@ app.post('/api/plans/purchase', async (req, res) => {
 
   }
 });
-
   /* =========================
      MOBILE MONEY / DIRECT
   ========================= */
@@ -1507,6 +1531,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
