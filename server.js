@@ -562,182 +562,42 @@ app.get('/api/referral/code', async (req, res) => {
 app.post('/api/plans/purchase', async (req, res) => {
   try {
 
-    console.log('Received plan purchase request:', req.body);
-
     // Get authorization header
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Invalid or missing token' });
+    // Validate header
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Missing authorization token" });
     }
 
-    const token = authHeader.split(' ')[1];
+    // Extract token
+    const token = authHeader.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ message: "Invalid token format" });
+    }
 
     // Find user
     const user = findUserByToken(token);
 
     if (!user) {
-      return res.status(401).json({ message: 'Invalid or missing token' });
+      return res.status(401).json({ message: "Invalid token or user not found" });
     }
 
     const { planId, amount, paymentMethod } = req.body;
-  user.walletBalance = (user.walletBalance || 0) + amount;
-  user.activePlan = planId;
-  user.totalDeposited = (user.totalDeposited || 0) + amount;
-  saveUsers();
 
-    
     if (!planId || !amount) {
-      return res.status(400).json({ message: 'Missing plan details' });
-    }
-
-    const numericAmount = Number(amount);
-
-    if (isNaN(numericAmount)) {
-      return res.status(400).json({ message: 'Invalid amount' });
+      return res.status(400).json({ message: "planId and amount are required" });
     }
 
     const now = new Date();
 
-    // Ensure plans array exists
-    if (!user.plans) {
-      user.plans = [];
-    }
-
-    const newPlan = {
-      planId,
-      amount: numericAmount,
-      paymentMethod: paymentMethod || "unknown",
-      startDate: now,
-      status: "active"
-    };
-
-    user.plans.push(newPlan);
-
-    // Ensure notifications array exists
-    if (!user.notifications) {
-      user.notifications = [];
-    }
-
-    user.notifications.push({
-      message: `Plan ${planId} activated successfully`,
-      date: now
-    });
-
-    console.log(`Plan ${planId} activated for user:`, user.email);
-
-    return res.json({
-      success: true,
-      message: "Plan activated successfully",
-      plan: newPlan
-    });
-
-  } catch (error) {
-
-    console.error("PURCHASE ERROR:", error);
-
-    return res.status(500).json({
-      message: "Server error while activating plan"
-    });
-  }
-});
-
-app.post('/api/plans/purchase', async (req, res) => {
-  try {
-    const auth = req.headers.authorization || "";
-    const token = auth.replace("Bearer ", "");
-
-    const user = findUserByToken(token);
-
-    if (!user) {
-      return res.status(401).json({ message: "Invalid or missing token" });
-    }
-
-    const { planId, amount } = req.body;
-    const now = new Date();
-
-    user.pendingPurchase = {
-      planId,
-      amount,
-      paymentMethod: "Debit Card",
-      createdAt: now.toISOString(),
-      verified: false
-    };
-
-    saveUsers();
-
-    const paymentRef = `PLAN_${user.id}_${Date.now()}`;
-
-    const rawPhone = user.phone_number || user.phoneNumber || "";
-
-    const phoneFormatted = rawPhone.startsWith("+237")
-      ? rawPhone
-      : `+237${rawPhone.replace(/^0/, "")}`;
-
-    const notchpayPayload = {
-      amount: Number(amount),
-      currency: "XAF",
-      reference: paymentRef,
-      customer: {
-        name: `${user.first_name || ""} ${user.last_name || ""}`,
-        email: user.email,
-        phone: phoneFormatted
-      },
-      description: `Plan Purchase - ${planId}`,
-      metadata: {
-        userId: user.id,
-        planId,
-        originalAmount: amount
-      }
-    };
-
-    const notchpayResponse = await axios.post(
-      "https://api.notchpay.co/payments/initialize",
-      notchpayPayload,
-      {
-        headers: {
-          Authorization: `Bearer ${notchpaySecretKey}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
-
-    return res.json({
-      message: "Payment initialized",
-      payment: notchpayResponse.data
-    });
-
-  } catch (error) {
-    console.error("Payment initialization error:", error);
-
-    return res.status(500).json({
-      message: "Failed to initialize payment"
-    });
-  }
-});
-  /* =========================
-     MOBILE MONEY / DIRECT
-  ========================= */
-
-app.post('/api/plans/purchase', async (req, res) => {
-  try {
-
-    const auth = req.headers.authorization || "";
-    const token = auth.replace("Bearer ", "");
-
-    const user = findUserByToken(token);
-
-    if (!user) {
-      return res.status(401).json({ message: "Invalid or missing token" });
-    }
-
-    const { planId, amount, paymentMethod } = req.body;
-    const now = new Date();
-
+    // Update wallet
     user.walletBalance = (user.walletBalance || 0) + amount;
     user.activePlan = planId;
     user.totalDeposited = (user.totalDeposited || 0) + amount;
 
+    // Withdrawal date (30 days)
     const withdrawalDate = new Date(
       now.getTime() + 30 * 24 * 60 * 60 * 1000
     );
@@ -775,6 +635,12 @@ app.post('/api/plans/purchase', async (req, res) => {
 
   }
 });
+
+  /* =========================
+     MOBILE MONEY / DIRECT
+  ========================= */
+
+
 
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
@@ -1641,6 +1507,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
