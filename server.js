@@ -394,18 +394,25 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/admin-login', async (req, res) => {
   try {
+
     const { email, password } = req.body || {};
 
     if (!email || !password) {
       return res.status(400).json({ message: "Missing credentials" });
     }
 
-    if (
- email === process.env.ADMIN_EMAIL &&
- password === process.env.ADMIN_PASSWORD
-) {
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+    if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+      return res.status(500).json({ message: "Admin credentials not configured" });
+    }
+
+    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+
       adminToken = makeToken();
       saveAdminToken();
+
       return res.json({ token: adminToken });
     }
 
@@ -1517,6 +1524,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
