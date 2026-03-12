@@ -419,66 +419,52 @@ app.post('/api/auth/admin-login', async (req, res) => {
 // --- user/profile and transactions ---
 
 app.get('/api/users/profile', async (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
+
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Missing authorization token" });
+  }
+
+  const token = authHeader.split(" ")[1];
 
   console.log("TOKEN RECEIVED:", token);
 
   try {
-    let user;
-    user = findUserByToken(token);
-    if (!user) {
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('token', token)
-          .single();
-        if (!error && data) {
-          user = data;
-        }
+
+    let user = findUserByToken(token);
+
+    if (!user && supabase) {
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('token', token)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Supabase error:", error);
+      }
+
+      if (data) {
+        user = data;
       }
     }
+
     if (!user) {
+      console.log("USER NOT FOUND FOR TOKEN:", token);
       return res.status(401).json({ message: 'Invalid or missing token' });
     }
-    
-    // Omit sensitive data
+
     const { password, ...publicData } = user;
+
     res.json(publicData);
+
   } catch (err) {
     console.error('Error fetching profile:', err);
     res.status(500).json({ message: 'Error fetching profile' });
   }
-});
 
-app.get('/api/transactions', async (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  
-  try {
-    let user;
-    user = findUserByToken(token);
-    if (!user) {
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('token', token)
-          .single();
-        if (!error && data) {
-          user = data;
-        }
-      }
-    }
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid or missing token' });
-    }
-    res.json(user.transactions || []);
-  } catch (err) {
-    console.error('Error fetching transactions:', err);
-    res.status(500).json({ message: 'Error fetching transactions' });
-  }
 });
 
 // --- referral endpoints ---
@@ -1531,6 +1517,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
