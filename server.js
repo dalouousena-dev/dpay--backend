@@ -624,7 +624,7 @@ app.post('/api/plans/purchase', async (req, res) => {
     saveUsers();
 
     // Create NotchPay payment
-   const notchResponse = await fetch("https://api.notchpay.co/v1/payments", {
+ const notchResponse = await fetch("https://api.notchpay.co/checkout", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1601,6 +1601,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
