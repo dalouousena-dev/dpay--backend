@@ -468,7 +468,6 @@ if (supabase) {
       ...data
     };
   }
-}
     }
 
     if (!user) {
@@ -1569,6 +1568,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
