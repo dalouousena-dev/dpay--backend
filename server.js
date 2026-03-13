@@ -645,8 +645,7 @@ app.post('/api/plans/purchase', async (req, res) => {
     // 🔹 Detect environment (sandbox or production)
     const apiKey = process.env.NOTCHPAY_API_KEY;
     const endpoint = apiKey.startsWith("sk_test")
-      ? "https://sandbox.notchpay.co/payments/initialize"
-      : "https://api.notchpay.co/payments/initialize";
+      "https://api.notchpay.co/payments"
 
     console.log("NOTCHPAY ENDPOINT:", endpoint);
 
@@ -718,7 +717,7 @@ app.post('/api/plans/purchase', async (req, res) => {
 
     const { amount, email } = req.body;
 
-    const response = await fetch("https://api.notchpay.co/payments/initialize", {
+    const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${process.env.NOTCHPAY_API_KEY}`,
@@ -753,7 +752,7 @@ app.post('/api/payments/create', async (req, res) => {
 
     const { amount, email } = req.body;
 
-    const response = await fetch("https://api.notchpay.co/payments/initialize", {
+    const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${process.env.NOTCHPAY_API_KEY}`,
