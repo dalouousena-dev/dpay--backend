@@ -633,27 +633,26 @@ app.post('/api/plans/purchase', async (req, res) => {
       body: JSON.stringify({
         amount: numericAmount,
         currency: "XAF",
-        customer: {
-          email: user.email
-        },
-        callback: "https://dpaybackend.onrender.com/api/payments/verify",
-        description: `Plan purchase: ${planId}`
+        email: user.email,
+        callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
+        description: `Plan purchase ${planId}`
       })
     });
 
     const notchData = await notchResponse.json();
 
-    if (!notchData || !notchData.authorization_url) {
-      console.error("NotchPay response:", notchData);
+    console.log("NotchPay response:", notchData);
 
+    if (!notchData?.data?.authorization_url) {
       return res.status(500).json({
-        message: "Failed to create payment session"
+        message: "Failed to create payment session",
+        notchError: notchData
       });
     }
 
     return res.json({
       success: true,
-      paymentUrl: notchData.authorization_url
+      paymentUrl: notchData.data.authorization_url
     });
 
   } catch (error) {
@@ -1598,6 +1597,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
