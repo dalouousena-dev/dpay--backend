@@ -421,9 +421,9 @@ app.post('/api/auth/admin-login', async (req, res) => {
  app.get('/api/users/profile', async (req, res) => {
   try {
 
-    const authHeader = req.headers.authorization || "";
+    const authHeader = req.headers.authorization;
 
-    if (!authHeader.startsWith("Bearer ")) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
         message: "Missing authorization token"
       });
@@ -440,16 +440,17 @@ app.post('/api/auth/admin-login', async (req, res) => {
     }
 
     if (!supabase) {
+      console.error("Supabase not initialized");
       return res.status(500).json({
-        message: "Supabase not initialized"
+        message: "Database connection error"
       });
     }
 
-    // Search user in database
     const { data, error } = await supabase
       .from("users")
       .select("*")
       .eq("token", token)
+      .limit(1)
       .maybeSingle();
 
     if (error) {
@@ -468,16 +469,16 @@ app.post('/api/auth/admin-login', async (req, res) => {
 
     console.log("USER FOUND:", data.email);
 
-    // Remove password before sending response
+    // remove password before sending to frontend
     const { password, ...publicData } = data;
 
-    return res.json(publicData);
+    res.json(publicData);
 
   } catch (err) {
 
     console.error("Error fetching profile:", err);
 
-    return res.status(500).json({
+    res.status(500).json({
       message: "Error fetching profile"
     });
 
@@ -1625,6 +1626,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
