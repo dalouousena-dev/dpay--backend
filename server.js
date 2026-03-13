@@ -570,8 +570,6 @@ app.post('/api/plans/purchase', async (req, res) => {
 
     const authHeader = req.headers.authorization || "";
 
-    console.log("Authorization header:", authHeader);
-
     if (!authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
         message: "Authorization token missing or invalid"
@@ -580,27 +578,16 @@ app.post('/api/plans/purchase', async (req, res) => {
 
     const token = authHeader.replace("Bearer ", "").trim();
 
-    if (!token) {
-      return res.status(401).json({
-        message: "Token extraction failed"
-      });
-    }
-
-    // Try local users first
     let user = findUserByToken(token);
 
-    // If not found locally, check Supabase
     if (!user && supabase) {
-
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('users')
         .select('*')
         .eq('token', token)
         .maybeSingle();
 
-      if (!error && data) {
-        user = data;
-      }
+      if (data) user = data;
     }
 
     if (!user) {
@@ -609,15 +596,13 @@ app.post('/api/plans/purchase', async (req, res) => {
       });
     }
 
-    const { planId, amount, paymentMethod } = req.body;
+    const { planId, amount } = req.body;
 
     if (!planId || !amount) {
       return res.status(400).json({
         message: "planId and amount are required"
       });
     }
-
-    const now = new Date();
 
     const numericAmount = Number(amount);
 
@@ -627,65 +612,55 @@ app.post('/api/plans/purchase', async (req, res) => {
       });
     }
 
-    // Initialize fields
-    user.walletBalance = user.walletBalance || 0;
-    user.totalDeposited = user.totalDeposited || 0;
-    user.transactions = user.transactions || [];
-
-    // Update wallet
-    user.walletBalance += numericAmount;
-    user.activePlan = planId;
-    user.totalDeposited += numericAmount;
-
-    const withdrawalDate = new Date(
-      now.getTime() + 30 * 24 * 60 * 60 * 1000
-    );
-
-    user.withdrawalAvailableAt = withdrawalDate.toISOString();
-    user.lastTransactionDate = now.toISOString();
-
-    user.transactions.push({
-      id: crypto.randomBytes(8).toString('hex'),
-      type: 'plan_purchase',
+    // Create pending purchase
+    user.pendingPurchase = {
       planId,
       amount: numericAmount,
-      paymentMethod: paymentMethod || "unknown",
-      at: now.toISOString()
-    });
+      createdAt: new Date().toISOString(),
+      verified: false
+    };
 
-    // Save locally if using file storage
     saveUsers();
 
-    // Also update Supabase if user came from DB
-    if (supabase && user.id) {
-      await supabase
-        .from('users')
-        .update({
-          wallet_balance: user.walletBalance,
-          active_plan: user.activePlan,
-          total_deposited: user.totalDeposited,
-          withdrawal_available_at: user.withdrawalAvailableAt
-        })
-        .eq('id', user.id);
-    }
-
-    return res.status(200).json({
+    return res.json({
       success: true,
-      message: "Plan purchased successfully",
-      activePlan: user.activePlan,
-      walletBalance: user.walletBalance,
-      withdrawalAvailableAt: user.withdrawalAvailableAt
+      message: "Redirecting to payment gateway",
+      planId,
+      amount: numericAmount
     });
 
   } catch (error) {
 
-    console.error("Plan purchase error:", error);
+    console.error("Purchase initialization error:", error);
 
     return res.status(500).json({
-      message: "Server error while purchasing plan"
+      message: "Server error while initializing purchase"
     });
 
   }
+});
+
+app.post('/api/payments/create', async (req, res) => {
+
+  const { amount, email } = req.body;
+
+  const response = await fetch("https://api.notchpay.co/payments", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      amount,
+      currency: "XAF",
+      customer: { email },
+      callback: "https://dpaybackend.onrender.com/api/payments/verify"
+    })
+  });
+
+  const data = await response.json();
+
+  res.json(data);
 });
   /* =========================
      MOBILE MONEY / DIRECT
@@ -1596,6 +1571,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
