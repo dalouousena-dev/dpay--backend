@@ -661,7 +661,7 @@ app.post('/api/plans/purchase', async (req, res) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
+        const notchResponse
       },
       body: JSON.stringify({
         amount: numericAmount,
