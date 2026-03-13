@@ -687,8 +687,7 @@ const notchResponse = await fetch(endpoint, {
         reference: `plan_${planId}_${Date.now()}`,
         callback: "https://dpaybackend.onrender.com/api/payments/verify",
         description: `Purchase of plan ${planId}`
-      })
-    });
+      });
 
     if (!notchResponse.ok) {
       const errorText = await notchResponse.text();
