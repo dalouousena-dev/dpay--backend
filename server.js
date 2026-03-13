@@ -621,15 +621,16 @@ return res.json({
   paymentUrl: notchData.data.authorization_url
 });
 
-  } catch (error) {
+  }catch (error) {
 
-    console.error("Purchase initialization error:", error);
+  console.error("❌ Purchase initialization error:", error);
 
-    return res.status(500).json({
-      message: "Server error while initializing purchase"
-    });
+  return res.status(500).json({
+    message: "Server error while initializing purchase",
+    error: error.message
+  });
 
-  }
+}
 });
 
 app.post('/api/payments/create', async (req, res) => {
@@ -1563,6 +1564,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
