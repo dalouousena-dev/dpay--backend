@@ -419,49 +419,70 @@ app.post('/api/auth/admin-login', async (req, res) => {
 
 app.get('/api/users/profile', async (req, res) => {
 
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Missing authorization token" });
-  }
-
-  const token = authHeader.split(" ")[1];
-
-  console.log("TOKEN RECEIVED:", token);
-
+ app.get('/api/users/profile', async (req, res) => {
   try {
 
-    let user = null;
+    const authHeader = req.headers.authorization || "";
 
-// Always fetch Supabase user if possible
-if (supabase) {
-  const { data } = await supabase
-    .from('users')
-    .select('id,email,username')
-    .eq('token', token)
-    .maybeSingle();
-
-  if (data) {
-    user = {
-      ...data
-    };
-  }
+    if (!authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        message: "Missing authorization token"
+      });
     }
 
-    if (!user) {
+    const token = authHeader.split(" ")[1];
+
+    console.log("TOKEN RECEIVED:", token);
+
+    if (!token) {
+      return res.status(401).json({
+        message: "Invalid token"
+      });
+    }
+
+    if (!supabase) {
+      return res.status(500).json({
+        message: "Supabase not initialized"
+      });
+    }
+
+    // Search user in database
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("token", token)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Supabase error:", error);
+      return res.status(500).json({
+        message: "Database error"
+      });
+    }
+
+    if (!data) {
       console.log("USER NOT FOUND FOR TOKEN:", token);
-      return res.status(401).json({ message: 'Invalid or missing token' });
+      return res.status(401).json({
+        message: "Invalid or missing token"
+      });
     }
 
-    const { password, ...publicData } = user;
+    console.log("USER FOUND:", data.email);
 
-    res.json(publicData);
+    // Remove password before sending response
+    const { password, ...publicData } = data;
+
+    return res.json(publicData);
 
   } catch (err) {
-    console.error('Error fetching profile:', err);
-    res.status(500).json({ message: 'Error fetching profile' });
-  }
 
+    console.error("Error fetching profile:", err);
+
+    return res.status(500).json({
+      message: "Error fetching profile"
+    });
+
+  }
 });
 
 // --- referral endpoints ---
@@ -1605,6 +1626,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
