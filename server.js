@@ -451,7 +451,7 @@ app.post('/api/auth/admin-login', async (req, res) => {
 // --- user/profile and transactions ---
 
 
- app.get('/api/users/profile', async (req, res) => {
+app.get('/api/users/profile', async (req, res) => {
   try {
 
     const authHeader = req.headers.authorization;
@@ -484,17 +484,10 @@ app.post('/api/auth/admin-login', async (req, res) => {
       .select("*")
       .eq("token", token)
       .limit(1)
-      .maybeSingle();
+      .single();   // 🔴 changed from maybeSingle()
 
     if (error) {
       console.error("Supabase error:", error);
-      return res.status(500).json({
-        message: "Database error"
-      });
-    }
-
-    if (!data) {
-      console.log("USER NOT FOUND FOR TOKEN:", token);
       return res.status(401).json({
         message: "Invalid or missing token"
       });
@@ -502,22 +495,20 @@ app.post('/api/auth/admin-login', async (req, res) => {
 
     console.log("USER FOUND:", data.email);
 
-    // remove password before sending to frontend
     const { password, ...publicData } = data;
 
-    res.json(publicData);
+    return res.json(publicData);
 
   } catch (err) {
 
     console.error("Error fetching profile:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Error fetching profile"
     });
 
   }
 });
-
 // --- referral endpoints ---
 
 app.get('/api/referral/stats', async (req, res) => {
@@ -1681,6 +1672,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
