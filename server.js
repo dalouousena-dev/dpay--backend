@@ -4,7 +4,6 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const fetch = require("node-fetch");
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
@@ -1570,6 +1569,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
