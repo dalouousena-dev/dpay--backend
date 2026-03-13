@@ -568,19 +568,16 @@ app.get('/api/referral/code', async (req, res) => {
 app.post('/api/plans/purchase', async (req, res) => {
   try {
 
-    // Get Authorization header safely
     const authHeader = req.headers.authorization || "";
 
-    console.log("Authorization header:", authHeader); // Debug
+    console.log("Authorization header:", authHeader);
 
-    // Check if header exists
     if (!authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
         message: "Authorization token missing or invalid"
       });
     }
 
-    // Extract token
     const token = authHeader.replace("Bearer ", "").trim();
 
     if (!token) {
@@ -589,8 +586,22 @@ app.post('/api/plans/purchase', async (req, res) => {
       });
     }
 
-    // Find user
-    const user = findUserByToken(token);
+    // Try local users first
+    let user = findUserByToken(token);
+
+    // If not found locally, check Supabase
+    if (!user && supabase) {
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('token', token)
+        .maybeSingle();
+
+      if (!error && data) {
+        user = data;
+      }
+    }
 
     if (!user) {
       return res.status(401).json({
@@ -608,7 +619,6 @@ app.post('/api/plans/purchase', async (req, res) => {
 
     const now = new Date();
 
-    // Ensure numeric amount
     const numericAmount = Number(amount);
 
     if (isNaN(numericAmount) || numericAmount <= 0) {
@@ -617,7 +627,7 @@ app.post('/api/plans/purchase', async (req, res) => {
       });
     }
 
-    // Initialize fields if missing
+    // Initialize fields
     user.walletBalance = user.walletBalance || 0;
     user.totalDeposited = user.totalDeposited || 0;
     user.transactions = user.transactions || [];
@@ -627,7 +637,6 @@ app.post('/api/plans/purchase', async (req, res) => {
     user.activePlan = planId;
     user.totalDeposited += numericAmount;
 
-    // Withdrawal after 30 days
     const withdrawalDate = new Date(
       now.getTime() + 30 * 24 * 60 * 60 * 1000
     );
@@ -635,7 +644,6 @@ app.post('/api/plans/purchase', async (req, res) => {
     user.withdrawalAvailableAt = withdrawalDate.toISOString();
     user.lastTransactionDate = now.toISOString();
 
-    // Save transaction
     user.transactions.push({
       id: crypto.randomBytes(8).toString('hex'),
       type: 'plan_purchase',
@@ -645,8 +653,21 @@ app.post('/api/plans/purchase', async (req, res) => {
       at: now.toISOString()
     });
 
-    // Save users database
+    // Save locally if using file storage
     saveUsers();
+
+    // Also update Supabase if user came from DB
+    if (supabase && user.id) {
+      await supabase
+        .from('users')
+        .update({
+          wallet_balance: user.walletBalance,
+          active_plan: user.activePlan,
+          total_deposited: user.totalDeposited,
+          withdrawal_available_at: user.withdrawalAvailableAt
+        })
+        .eq('id', user.id);
+    }
 
     return res.status(200).json({
       success: true,
@@ -669,8 +690,6 @@ app.post('/api/plans/purchase', async (req, res) => {
   /* =========================
      MOBILE MONEY / DIRECT
   ========================= */
-
-
 
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
@@ -1539,6 +1558,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
