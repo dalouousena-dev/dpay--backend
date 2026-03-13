@@ -627,8 +627,8 @@ return res.json({
 
   return res.status(500).json({
     message: "Server error while initializing purchase",
-    error: error.message,
-    stack: error.stack
+    error: error?.message || error,
+    details: error
   });
 
 }
@@ -1565,6 +1565,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
