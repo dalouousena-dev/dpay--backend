@@ -417,7 +417,6 @@ app.post('/api/auth/admin-login', async (req, res) => {
 });
 // --- user/profile and transactions ---
 
-app.get('/api/users/profile', async (req, res) => {
 
  app.get('/api/users/profile', async (req, res) => {
   try {
@@ -1626,6 +1625,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
