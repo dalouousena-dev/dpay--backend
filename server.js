@@ -1219,26 +1219,31 @@ app.post('/api/users/request-withdrawal', async (req, res) => {
 // --- admin endpoints ---
 
 app.get('/api/admin/users', async (req, res) => {
+
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
+
   if (token !== adminToken) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
-  
+
   try {
+
     let usersData = [];
-    
-    // Try to fetch from Supabase first
+
+    // Try Supabase first
     if (supabase) {
+
       const { data, error } = await supabase
         .from('users')
-        .select('id, email, username, phone_number, active_plan, next_purchase_window_ends, withdrawal_available_at, created_at, wallet_balance, total_profits, total_deposited, is_active');
-      
+        .select('*');
+
       if (error) {
-        console.warn('⚠️ Supabase error fetching users, falling back to file storage:', error.message);
-      } else if (data && data.length > 0) {
-        console.log('✅ Successfully fetched', data.length, 'users from Supabase');
-        // Map Supabase data to expected frontend format
+        console.warn('⚠️ Supabase error fetching users:', error.message);
+      } else if (data) {
+
+        console.log('✅ Users fetched from Supabase:', data.length);
+
         usersData = data.map(u => ({
           id: u.id,
           email: u.email,
@@ -1253,12 +1258,15 @@ app.get('/api/admin/users', async (req, res) => {
           totalDeposited: u.total_deposited,
           isActive: u.is_active
         }));
+
         return res.json(usersData);
       }
+
     }
-    
-    // Fallback to file-based storage if Supabase is not available or empty
-    console.log('📁 Using file-based storage, found', users.length, 'users');
+
+    // fallback to file storage
+    console.log('📁 Using file-based storage:', users.length);
+
     usersData = users.map(u => ({
       id: u.id,
       email: u.email,
@@ -1273,26 +1281,20 @@ app.get('/api/admin/users', async (req, res) => {
       totalDeposited: u.totalDeposited || 0,
       isActive: u.isActive || true
     }));
-    
+
     return res.json(usersData);
+
   } catch (err) {
+
     console.error('❌ Error fetching admin users:', err);
-    // Even if there's an error, try to return file-based data as last resort
-    try {
-      const fallbackUsers = users.map(u => ({
-        id: u.id,
-        email: u.email,
-        username: u.username,
-        phoneNumber: u.phoneNumber,
-        activePlan: u.activePlan,
-        walletBalance: u.walletBalance || 0
-      }));
-      return res.json(fallbackUsers);
-    } catch (fallbackErr) {
-      console.error('❌ Fallback failed:', fallbackErr);
-      res.status(500).json({ message: 'Failed to fetch users', error: err.message });
-    }
+
+    res.status(500).json({
+      message: 'Failed to fetch users',
+      error: err.message
+    });
+
   }
+
 });
 
 app.get('/api/admin/pending-withdrawals', async (req, res) => {
@@ -1537,6 +1539,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
