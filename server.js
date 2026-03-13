@@ -452,7 +452,7 @@ app.get('/api/users/profile', async (req, res) => {
 
   try {
 
-    let user = findUserByToken(token);
+    let user = null;
 
 // Always fetch Supabase user if possible
 if (supabase) {
@@ -464,7 +464,6 @@ if (supabase) {
 
   if (data) {
     user = {
-      ...user,
       ...data
     };
   }
@@ -1568,6 +1567,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
