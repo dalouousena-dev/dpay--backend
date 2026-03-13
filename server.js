@@ -600,29 +600,53 @@ app.post('/api/plans/purchase', async (req, res) => {
 
     const token = authHeader.replace("Bearer ", "").trim();
 
-    let user = findUserByToken(token);
+    console.log("TOKEN RECEIVED:", token);
 
-    if (!user) {
+    // 🔹 Get user from Supabase
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("token", token)
+      .limit(1)
+      .single();
+
+    if (error || !user) {
+      console.log("USER NOT FOUND FOR TOKEN:", token);
       return res.status(401).json({
         message: "Invalid token or user not found"
       });
     }
 
+    console.log("USER FOUND:", user.email);
+
     const { planId, amount } = req.body;
 
-    const numericAmount = Number(amount);
-
-    console.log("NOTCHPAY_API_KEY:", process.env.NOTCHPAY_API_KEY);
-    console.log("USER EMAIL:", user?.email);
-    console.log("PLAN:", planId);
-    console.log("AMOUNT:", numericAmount);
-
-    if (!user?.email) {
+    if (!planId || !amount) {
       return res.status(400).json({
-        message: "User email missing"
+        message: "Plan ID and amount are required"
       });
     }
 
+    const numericAmount = Number(amount);
+
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({
+        message: "Invalid amount"
+      });
+    }
+
+    if (!process.env.NOTCHPAY_API_KEY) {
+      return res.status(500).json({
+        message: "Payment gateway not configured"
+      });
+    }
+
+    console.log("NOTCHPAY_API_KEY:", process.env.NOTCHPAY_API_KEY ? "Loaded" : "Missing");
+    console.log("USER EMAIL:", user.email);
+    console.log("PLAN:", planId);
+    console.log("AMOUNT:", numericAmount);
+
+    // 🔹 Create NotchPay payment
     const notchResponse = await fetch("https://api.notchpay.co/payments/initialize", {
       method: "POST",
       headers: {
@@ -642,11 +666,21 @@ app.post('/api/plans/purchase', async (req, res) => {
       })
     });
 
+    if (!notchResponse.ok) {
+      const errorText = await notchResponse.text();
+      console.error("❌ NotchPay HTTP error:", errorText);
+
+      return res.status(500).json({
+        message: "Failed to create payment session",
+        notchError: errorText
+      });
+    }
+
     const notchData = await notchResponse.json();
 
     console.log("NotchPay response:", notchData);
 
-    if (!notchData || !notchData.data || !notchData.data.authorization_url) {
+    if (!notchData?.data?.authorization_url) {
       return res.status(500).json({
         message: "Failed to create payment session",
         notchError: notchData
@@ -1672,6 +1706,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
