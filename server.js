@@ -578,17 +578,73 @@ app.post('/api/plans/purchase', async (req, res) => {
 
     let user = findUserByToken(token);
 
-    // ... your user checks here ...
+    if (!user) {
+      return res.status(401).json({
+        message: "Invalid token or user not found"
+      });
+    }
 
     const { planId, amount } = req.body;
 
     const numericAmount = Number(amount);
 
-    // 🔴 ADD THIS LINE HERE
-  console.log("NOTCHPAY_API_KEY:", process.env.NOTCHPAY_API_KEY);
-console.log("USER EMAIL:", user?.email);
-console.log("PLAN:", planId);
-console.log("AMOUNT:", numericAmount);
+    console.log("NOTCHPAY_API_KEY:", process.env.NOTCHPAY_API_KEY);
+    console.log("USER EMAIL:", user?.email);
+    console.log("PLAN:", planId);
+    console.log("AMOUNT:", numericAmount);
+
+    if (!user?.email) {
+      return res.status(400).json({
+        message: "User email missing"
+      });
+    }
+
+    const notchResponse = await fetch("https://api.notchpay.co/payments/initialize", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.NOTCHPAY_API_KEY}`
+      },
+      body: JSON.stringify({
+        amount: numericAmount,
+        currency: "XAF",
+        customer: {
+          email: user.email,
+          name: user.username || "Customer"
+        },
+        reference: `plan_${planId}_${Date.now()}`,
+        callback: "https://dpaybackend.onrender.com/api/payments/verify",
+        description: `Purchase of plan ${planId}`
+      })
+    });
+
+    const notchData = await notchResponse.json();
+
+    console.log("NotchPay response:", notchData);
+
+    if (!notchData || !notchData.data || !notchData.data.authorization_url) {
+      return res.status(500).json({
+        message: "Failed to create payment session",
+        notchError: notchData
+      });
+    }
+
+    return res.json({
+      success: true,
+      paymentUrl: notchData.data.authorization_url
+    });
+
+  } catch (error) {
+
+    console.error("❌ Purchase initialization error:", error);
+
+    return res.status(500).json({
+      message: "Server error while initializing purchase",
+      error: error.message
+    });
+
+  }
+});
 
     // Create NotchPay payment
     
@@ -1570,6 +1626,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
