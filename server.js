@@ -726,7 +726,7 @@ app.post('/api/plans/purchase', async (req, res) => {
     const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+     Authorization: process.env.NOTCHPAY_API_KEY
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -761,7 +761,7 @@ app.post('/api/payments/create', async (req, res) => {
     const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+    Authorization: process.env.NOTCHPAY_API_KEY
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
