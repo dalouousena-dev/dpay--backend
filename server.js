@@ -694,57 +694,95 @@ app.post('/api/plans/purchase', async (req, res) => {
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
 app.post('/api/payments/verify', async (req, res) => {
-  const { userId, paymentId } = req.body;
-  if (!userId || !paymentId) return res.status(400).json({ message: 'Missing parameters' });
-  const user = users.find(u => u.id === userId);
-  if (!user || !user.pendingPurchase) return res.status(404).json({ message: 'Pending purchase not found' });
 
-  // mark as verified and activate plan
-  user.pendingPurchase.verified = true;
+  const authHeader = req.headers.authorization || "";
+
+  if (!authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Missing authorization token" });
+  }
+
+  const token = authHeader.replace("Bearer ", "").trim();
+
+  let user = findUserByToken(token);
+
+  // If not found locally, check Supabase
+  if (!user && supabase) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('token', token)
+      .maybeSingle();
+
+    if (!error && data) {
+      user = data;
+    }
+  }
+
+  if (!user) {
+    return res.status(401).json({ message: "Invalid token or user not found" });
+  }
+
+  const { paymentId } = req.body;
+
+  if (!paymentId) {
+    return res.status(400).json({ message: "Missing paymentId" });
+  }
+
+  if (!user.pendingPurchase) {
+    return res.status(404).json({ message: "Pending purchase not found" });
+  }
+
   const now = new Date();
+
+  user.pendingPurchase.verified = true;
+
   user.activePlan = user.pendingPurchase.planId;
   user.walletBalance = (user.walletBalance || 0) + user.pendingPurchase.amount;
   user.totalDeposited = (user.totalDeposited || 0) + user.pendingPurchase.amount;
+
   user.lastTransactionDate = now.toISOString();
-  user.withdrawalAvailableAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  // Record transaction
+
+  user.withdrawalAvailableAt = new Date(
+    now.getTime() + 30 * 24 * 60 * 60 * 1000
+  ).toISOString();
+
   user.transactions = user.transactions || [];
-  user.transactions.push({ id: crypto.randomBytes(8).toString('hex'), type: 'plan_purchase', planId: user.pendingPurchase.planId, amount: user.pendingPurchase.amount, paymentMethod: user.pendingPurchase.paymentMethod, at: now.toISOString() });
-  
-  // Apply referral commission if user has a referrer
-  if (user.referrer_id) {
-    const referrer = users.find(u => u.id === user.referrer_id);
-    if (referrer) {
-      const tier = getCommissionTier(referrer.referral_count || 0);
-      const commissionAmount = Math.floor(user.pendingPurchase.amount * tier.commissionPercent);
-      if (commissionAmount > 0) {
-        referrer.wallet_balance = (referrer.wallet_balance || 0) + commissionAmount;
-        logTransaction(referrer.id, 'referral_commission', commissionAmount, `Commission on plan purchase by ${user.username || 'user'} (${tier.commission})`);
-      }
-    }
-  }
-  
+
+  user.transactions.push({
+    id: crypto.randomBytes(8).toString('hex'),
+    type: 'plan_purchase',
+    planId: user.pendingPurchase.planId,
+    amount: user.pendingPurchase.amount,
+    paymentMethod: user.pendingPurchase.paymentMethod,
+    at: now.toISOString()
+  });
+
   delete user.pendingPurchase;
+
   saveUsers();
 
-  // Also update Supabase
-  if (supabase) {
-    supabase
+  // Update Supabase
+  if (supabase && user.id) {
+
+    await supabase
       .from('users')
       .update({
         active_plan: user.activePlan,
         wallet_balance: user.walletBalance,
         total_deposited: user.totalDeposited,
         withdrawal_available_at: user.withdrawalAvailableAt,
-        last_transaction_date: user.lastTransactionDate,
+        last_transaction_date: user.lastTransactionDate
       })
-      .eq('id', userId)
-      .then(({ error }) => {
-        if (error) console.error('Error updating user in Supabase:', error);
-      });
+      .eq('id', user.id);
+
   }
 
-  return res.json({ message: 'Payment verified and plan activated', withdrawalAvailableAt: user.withdrawalAvailableAt, walletBalance: user.walletBalance });
+  return res.json({
+    message: "Payment verified and plan activated",
+    withdrawalAvailableAt: user.withdrawalAvailableAt,
+    walletBalance: user.walletBalance
+  });
+
 });
 
 // NotchPay Webhook - Handle payment success/failure events
@@ -1558,6 +1596,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
