@@ -580,66 +580,30 @@ app.post('/api/plans/purchase', async (req, res) => {
 
     let user = findUserByToken(token);
 
-    // Check Supabase if not found locally
-    if (!user && supabase) {
-      const { data } = await supabase
-        .from('users')
-        .select('*')
-        .eq('token', token)
-        .maybeSingle();
-
-      if (data) user = data;
-    }
-
-    if (!user) {
-      return res.status(401).json({
-        message: "Invalid token or user not found"
-      });
-    }
+    // ... your user checks here ...
 
     const { planId, amount } = req.body;
 
-    if (!planId || !amount) {
-      return res.status(400).json({
-        message: "planId and amount are required"
-      });
-    }
-
     const numericAmount = Number(amount);
 
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      return res.status(400).json({
-        message: "Invalid amount"
-      });
-    }
-
-    // Create pending purchase
-    user.pendingPurchase = {
-      planId,
-      amount: numericAmount,
-      createdAt: new Date().toISOString(),
-      verified: false
-    };
-
-    saveUsers();
+    // 🔴 ADD THIS LINE HERE
+    console.log("NOTCHPAY KEY FROM ENV:", process.env.NOTCHPAY_API_KEY);
 
     // Create NotchPay payment
-const notchResponse = await fetch("https://api.notchpay.co/payments/initialize", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`
-  },
-  body: JSON.stringify({
-    amount: numericAmount,
-    currency: "XAF",
-    description: `Plan purchase ${planId}`,
-    customer: {
-      email: user.email
-    },
-    callback: "https://dpaybackend.onrender.com/api/payments/verify"
-  })
-});
+    const notchResponse = await fetch("https://api.notchpay.co/payments/initialize", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`
+      },
+      body: JSON.stringify({
+        amount: numericAmount,
+        currency: "XAF",
+        email: user.email,
+        reference: `plan_${planId}_${Date.now()}`,
+        callback_url: "https://dpaybackend.onrender.com/api/payments/verify"
+      })
+    });
 
 const notchData = await notchResponse.json();
 
@@ -1599,6 +1563,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
