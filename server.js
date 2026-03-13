@@ -738,7 +738,7 @@ const notchResponse = await fetch(endpoint, {
     const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
       headers: {
-     Authorization: process.env.NOTCHPAY_API_KEY
+     Authorization: process.env.NOTCHPAY_API_KEY,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
