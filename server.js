@@ -43,8 +43,8 @@ const notchpayPublicKey = process.env.NOTCHPAY_PUBLIC_KEY;
 const NOTCHPAY_API_KEY = process.env.NOTCHPAY_API_KEY;
 const notchpayHashKey = process.env.NOTCHPAY_HASH_KEY;
 
-if (!notchpaySecretKey) {
-  console.error("❌ NOTCHPAY_PRIVATE_KEY missing");
+if (!process.env.NOTCHPAY_API_KEY) {
+  console.error("❌ NOTCHPAY_API_KEY missing");
 }
 
 // ===== FILE-BASED STORAGE (Fallback) =====
@@ -1069,15 +1069,24 @@ app.post('/api/webhooks/notchpay', async (req, res) => {
   }
 });
 
+
 // Health check endpoint for NotchPay webhook configuration
 app.get('/api/webhooks/notchpay/health', (req, res) => {
-  const isConfigured = !!(notchpayHashKey && notchpaySecretKey);
+
+  const notchpayHashKey = process.env.NOTCHPAY_HASH_KEY;
+  const notchpayApiKey = process.env.NOTCHPAY_API_KEY;
+
+  const isConfigured = !!(notchpayHashKey && notchpayApiKey);
+
   res.json({
     status: isConfigured ? 'ready' : 'not-configured',
     hasHashKey: !!notchpayHashKey,
-    hasSecretKey: !!notchpaySecretKey,
-    message: isConfigured ? 'NotchPay webhook is configured and ready' : 'NotchPay credentials are missing'
+    hasSecretKey: !!notchpayApiKey,
+    message: isConfigured
+      ? 'NotchPay webhook is configured and ready'
+      : 'NotchPay credentials are missing'
   });
+
 });
 
 // Notifications endpoint
