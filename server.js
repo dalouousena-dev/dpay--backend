@@ -657,13 +657,26 @@ app.post('/api/plans/purchase', async (req, res) => {
     console.log("NOTCHPAY ENDPOINT:", endpoint);
 
     // 🔹 Create payment on NotchPay
-    console.log("NOTCHPAY KEY PREFIX:", apiKey?.slice(0,5));
-    const notchResponse = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        const notchResponse
-      },
+   console.log("NOTCHPAY KEY PREFIX:", apiKey?.slice(0,5));
+
+const notchResponse = await fetch(endpoint, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: apiKey
+  },
+  body: JSON.stringify({
+    amount: numericAmount,
+    currency: "XAF",
+    customer: {
+      email: user.email,
+      name: user.username || "Customer"
+    },
+    reference: `plan_${planId}_${Date.now()}`,
+    callback: "https://dpaybackend.onrender.com/api/payments/verify",
+    description: `Purchase of plan ${planId}`
+  })
+});
       body: JSON.stringify({
         amount: numericAmount,
         currency: "XAF",
