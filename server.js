@@ -599,7 +599,13 @@ app.post('/api/plans/purchase', async (req, res) => {
 
     console.log("TOKEN RECEIVED:", token);
 
-    // 🔹 Find user in Supabase
+    if (!token) {
+      return res.status(401).json({
+        message: "Invalid token"
+      });
+    }
+
+    // 🔹 Get user from Supabase
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
@@ -632,29 +638,30 @@ app.post('/api/plans/purchase', async (req, res) => {
       });
     }
 
-    if (!process.env.NOTCHPAY_API_KEY) {
+    const apiKey = process.env.NOTCHPAY_API_KEY;
+
+    if (!apiKey) {
+      console.error("NOTCHPAY_API_KEY missing");
       return res.status(500).json({
         message: "Payment gateway not configured"
       });
     }
 
-    console.log("USER EMAIL:", user.email);
-    console.log("PLAN:", planId);
-    console.log("AMOUNT:", numericAmount);
+    console.log("NOTCHPAY_API_KEY:", apiKey ? "Loaded" : "Missing");
 
-    // 🔹 Detect environment (sandbox or production)
-    const apiKey = process.env.NOTCHPAY_API_KEY;
+    // 🔹 Choose endpoint depending on key type
     const endpoint = apiKey.startsWith("sk_test")
-      "https://api.notchpay.co/payments"
+      ? "https://sandbox.notchpay.co/payments"
+      : "https://api.notchpay.co/payments";
 
     console.log("NOTCHPAY ENDPOINT:", endpoint);
 
-    // 🔹 Create payment session
+    // 🔹 Create payment on NotchPay
     const notchResponse = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         amount: numericAmount,
@@ -664,13 +671,12 @@ app.post('/api/plans/purchase', async (req, res) => {
           name: user.username || "Customer"
         },
         reference: `plan_${planId}_${Date.now()}`,
-        callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
+        callback: "https://dpaybackend.onrender.com/api/payments/verify",
         description: `Purchase of plan ${planId}`
       })
     });
 
     if (!notchResponse.ok) {
-
       const errorText = await notchResponse.text();
 
       console.error("❌ NotchPay HTTP error:", errorText);
@@ -679,23 +685,23 @@ app.post('/api/plans/purchase', async (req, res) => {
         message: "Failed to create payment session",
         notchError: errorText
       });
-
     }
 
     const notchData = await notchResponse.json();
 
     console.log("NotchPay response:", notchData);
 
-    if (!notchData?.data?.authorization_url) {
+    if (!notchData?.data?.checkout_url) {
       return res.status(500).json({
-        message: "Failed to create payment session",
+        message: "Payment URL not received",
         notchError: notchData
       });
     }
 
+    // 🔹 Send payment URL to frontend
     return res.json({
       success: true,
-      paymentUrl: notchData.data.authorization_url
+      paymentUrl: notchData.data.checkout_url
     });
 
   } catch (error) {
@@ -709,7 +715,6 @@ app.post('/api/plans/purchase', async (req, res) => {
 
   }
 });
-
     // Create NotchPay payment
     
   app.post('/api/payments/create', async (req, res) => {
