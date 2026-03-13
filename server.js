@@ -1578,6 +1578,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   try {
 
+    // find user in database
     const user = await getUserByEmail(email);
 
     if (!user) {
@@ -1586,6 +1587,7 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
+    // verify password
     if (user.password !== password) {
       return res.status(401).json({
         message: "Invalid email or password"
@@ -1595,11 +1597,13 @@ app.post('/api/auth/login', async (req, res) => {
     // generate new token
     const newToken = makeToken();
 
-    // 🔴 update token in Supabase
-    const { error } = await supabase
+    // update token in Supabase
+    const { data, error } = await supabase
       .from("users")
       .update({ token: newToken })
-      .eq("id", user.id);
+      .eq("id", user.id)
+      .select()
+      .maybeSingle();
 
     if (error) {
       console.error("Supabase update error:", error);
@@ -1608,7 +1612,7 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    console.log("TOKEN SAVED FOR USER:", user.email, newToken);
+    console.log("TOKEN SAVED:", newToken);
 
     return res.json({
       message: "Login successful",
@@ -1644,6 +1648,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
