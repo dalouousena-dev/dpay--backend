@@ -592,76 +592,74 @@ console.log("AMOUNT:", numericAmount);
 
     // Create NotchPay payment
     
-   const notchResponse = await fetch("https://api.notchpay.co/payments/initialize", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`
-  },
-  body: JSON.stringify({
-    amount: numericAmount,
-    currency: "XAF",
+  app.post('/api/payments/create', async (req, res) => {
+  try {
 
-    customer: {
-      email: user.email,
-      name: user.username || "Customer"
-    },
+    const { amount, email } = req.body;
 
-    reference: `plan_${planId}_${Date.now()}`,
+    const response = await fetch("https://api.notchpay.co/payments/initialize", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        amount,
+        currency: "XAF",
+        customer: { email },
+        reference: `payment_${Date.now()}`,
+        callback: "https://dpaybackend.onrender.com/api/payments/verify"
+      })
+    });
 
-    callback: "https://dpaybackend.onrender.com/api/payments/verify",
+    const data = await response.json();
 
-    description: `Purchase of plan ${planId}`
-  })
-});
+    return res.json(data);
 
-if (!notchResponse.ok) {
-  const text = await notchResponse.text();
-  console.error("❌ NotchPay HTTP error:", text);
+  } catch (error) {
 
-  return res.status(500).json({
-    message: "Failed to create payment session",
-    notchError: text
-  });
-}
+    console.error("❌ Payment creation error:", error);
 
-const notchData = await notchResponse.json();
+    res.status(500).json({
+      message: "Failed to create payment"
+    });
 
-console.log("✅ NotchPay response:", notchData);
-
-if (!notchData?.data?.authorization_url) {
-  return res.status(500).json({
-    message: "Failed to create payment session",
-    notchError: notchData
-  });
-}
-
-return res.json({
-  success: true,
-  paymentUrl: notchData.data.authorization_url
+  }
 });
 
 app.post('/api/payments/create', async (req, res) => {
+  try {
 
-  const { amount, email } = req.body;
+    const { amount, email } = req.body;
 
-  const response = await fetch("https://api.notchpay.co/payments", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      amount,
-      currency: "XAF",
-      customer: { email },
-      callback: "https://dpaybackend.onrender.com/api/payments/verify"
-    })
-  });
+    const response = await fetch("https://api.notchpay.co/payments/initialize", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        amount,
+        currency: "XAF",
+        customer: { email },
+        reference: `payment_${Date.now()}`,
+        callback: "https://dpaybackend.onrender.com/api/payments/verify"
+      })
+    });
 
-  const data = await response.json();
+    const data = await response.json();
 
-  res.json(data);
+    return res.json(data);
+
+  } catch (error) {
+
+    console.error("❌ Payment creation error:", error);
+
+    res.status(500).json({
+      message: "Failed to create payment"
+    });
+
+  }
 });
   /* =========================
      MOBILE MONEY / DIRECT
