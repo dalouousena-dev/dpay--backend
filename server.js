@@ -1571,26 +1571,44 @@ app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    return res.status(400).json({ message: "Missing credentials" });
+    return res.status(400).json({
+      message: "Missing credentials"
+    });
   }
 
   try {
 
-    let user = await getUserByEmail(email);
+    const user = await getUserByEmail(email);
 
     if (!user) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({
+        message: "Invalid email or password"
+      });
     }
 
     if (user.password !== password) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({
+        message: "Invalid email or password"
+      });
     }
 
-    // generate new session token
+    // generate new token
     const newToken = makeToken();
-    user.token = newToken;
 
-    await updateUser(user.id, { token: newToken });
+    // 🔴 update token in Supabase
+    const { error } = await supabase
+      .from("users")
+      .update({ token: newToken })
+      .eq("id", user.id);
+
+    if (error) {
+      console.error("Supabase update error:", error);
+      return res.status(500).json({
+        message: "Failed to update session token"
+      });
+    }
+
+    console.log("TOKEN SAVED FOR USER:", user.email, newToken);
 
     return res.json({
       message: "Login successful",
@@ -1626,6 +1644,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
