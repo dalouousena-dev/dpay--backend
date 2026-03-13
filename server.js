@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const fetch = require("node-fetch");
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
@@ -587,9 +588,13 @@ app.post('/api/plans/purchase', async (req, res) => {
     const numericAmount = Number(amount);
 
     // 🔴 ADD THIS LINE HERE
-    console.log("NOTCHPAY KEY FROM ENV:", process.env.NOTCHPAY_API_KEY);
+  console.log("NOTCHPAY_API_KEY:", process.env.NOTCHPAY_API_KEY);
+console.log("USER EMAIL:", user?.email);
+console.log("PLAN:", planId);
+console.log("AMOUNT:", numericAmount);
 
     // Create NotchPay payment
+    
     const notchResponse = await fetch("https://api.notchpay.co/payments/initialize", {
       method: "POST",
       headers: {
@@ -1565,6 +1570,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
