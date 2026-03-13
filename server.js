@@ -592,24 +592,42 @@ console.log("AMOUNT:", numericAmount);
 
     // Create NotchPay payment
     
-    const notchResponse = await fetch("https://api.notchpay.co/payments/initialize", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`
-      },
-      body: JSON.stringify({
-        amount: numericAmount,
-        currency: "XAF",
-        email: user.email,
-        reference: `plan_${planId}_${Date.now()}`,
-        callback_url: "https://dpaybackend.onrender.com/api/payments/verify"
-      })
-    });
+   const notchResponse = await fetch("https://api.notchpay.co/payments/initialize", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`
+  },
+  body: JSON.stringify({
+    amount: numericAmount,
+    currency: "XAF",
+
+    customer: {
+      email: user.email,
+      name: user.username || "Customer"
+    },
+
+    reference: `plan_${planId}_${Date.now()}`,
+
+    callback: "https://dpaybackend.onrender.com/api/payments/verify",
+
+    description: `Purchase of plan ${planId}`
+  })
+});
+
+if (!notchResponse.ok) {
+  const text = await notchResponse.text();
+  console.error("❌ NotchPay HTTP error:", text);
+
+  return res.status(500).json({
+    message: "Failed to create payment session",
+    notchError: text
+  });
+}
 
 const notchData = await notchResponse.json();
 
-console.log("NotchPay response:", notchData);
+console.log("✅ NotchPay response:", notchData);
 
 if (!notchData?.data?.authorization_url) {
   return res.status(500).json({
@@ -621,19 +639,6 @@ if (!notchData?.data?.authorization_url) {
 return res.json({
   success: true,
   paymentUrl: notchData.data.authorization_url
-});
-
-  }catch (error) {
-
-  console.error("❌ Purchase initialization error:", error);
-
-  return res.status(500).json({
-    message: "Server error while initializing purchase",
-    error: error?.message || error,
-    details: error
-  });
-
-}
 });
 
 app.post('/api/payments/create', async (req, res) => {
@@ -1567,6 +1572,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
