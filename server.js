@@ -401,19 +401,32 @@ app.post('/api/auth/admin-login', async (req, res) => {
       return res.status(400).json({ message: "Missing credentials" });
     }
 
-    const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+    // Read environment variables safely
+    const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+    const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || "").trim();
 
     if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+      console.error("Admin credentials not configured in environment variables");
       return res.status(500).json({ message: "Admin credentials not configured" });
     }
 
-    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+    // Normalize user input
+    const inputEmail = email.trim().toLowerCase();
+    const inputPassword = password.trim();
+
+    console.log("Admin login attempt:");
+    console.log("Input email:", inputEmail);
+    console.log("Env email:", ADMIN_EMAIL);
+
+    if (inputEmail === ADMIN_EMAIL && inputPassword === ADMIN_PASSWORD) {
 
       adminToken = makeToken();
       saveAdminToken();
 
-      return res.json({ token: adminToken });
+      return res.json({
+        message: "Admin login successful",
+        token: adminToken
+      });
     }
 
     return res.status(401).json({ message: "Invalid admin credentials" });
@@ -1524,6 +1537,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
