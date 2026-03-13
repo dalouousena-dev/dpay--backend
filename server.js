@@ -250,79 +250,112 @@ async function logTransaction(userId, type, amount, description = '') {
   }
 }
 
+async function createUser(user) {
+  const { data, error } = await supabase
+    .from("users")
+    .insert({
+      id: user.id,
+      email: user.email,
+      password: user.password,
+      username: user.username,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      phone_number: user.phone_number,
+      created_at: user.created_at,
+      wallet_balance: user.wallet_balance,
+      total_profits: user.total_profits,
+      total_deposited: user.total_deposited,
+      token: user.token,
+      referral_code: user.referral_code,
+      referrer_id: user.referrer_id,
+      referral_count: user.referral_count
+    })
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return data;
+}
  // ✅ REGISTER ROUTE ENDS HERE
 
   // Check if user already exists
 app.post('/api/auth/register', async (req, res) => {
 
   const { 
-    email, 
-    password, 
-    username, 
-    firstName, 
-    lastName, 
-    phoneNumber, 
-    referralCode 
-  } = req.body;
-
-  if (!email || !password || !username) {
-    return res.status(400).json({ message: 'Missing required fields' });
-  }
-
-  const existingUser = await getUserByEmail(email);
-
-  if (existingUser) {
-    return res.status(409).json({ message: 'User already exists' });
-  }
-
-  // Check if referral code is valid
-  let referrerId = null;
-
-  if (referralCode) {
-    const referrer = findUserByReferralCode(referralCode);
-
-    if (!referrer) {
-      return res.status(400).json({ message: 'Invalid referral code' });
-    }
-
-    referrerId = referrer.id;
-  }
-
-  const newUser = {
-    id: makeUUID(),
     email,
     password,
     username,
+    firstName,
+    lastName,
+    phoneNumber,
+    referralCode
+  } = req.body;
 
-    // ✅ these will now be saved correctly
-    first_name: firstName || '',
-    last_name: lastName || '',
-    phone_number: phoneNumber || '',
-
-    created_at: new Date().toISOString(),
-
-    active_plan: null,
-    next_purchase_window_ends: null,
-    withdrawal_available_at: null,
-    last_transaction_date: null,
-    last_product_purchase: null,
-
-    wallet_balance: 0,
-    total_profits: 0,
-    total_deposited: 0,
-
-    token: makeToken(),
-
-    referral_code: makeReferralCode(),
-    referrer_id: referrerId,
-    referral_count: 0
-  };
+  if (!email || !password || !username) {
+    return res.status(400).json({
+      message: "Email, username and password are required"
+    });
+  }
 
   try {
 
+    const existingUser = await getUserByEmail(email);
+
+    if (existingUser) {
+      return res.status(409).json({
+        message: "User already exists"
+      });
+    }
+
+    let referrerId = null;
+
+    if (referralCode) {
+
+      const referrer = findUserByReferralCode(referralCode);
+
+      if (!referrer) {
+        return res.status(400).json({
+          message: "Invalid referral code"
+        });
+      }
+
+      referrerId = referrer.id;
+    }
+
+    const newUser = {
+      id: makeUUID(),
+
+      email,
+      password,
+      username,
+
+      first_name: firstName || "",
+      last_name: lastName || "",
+      phone_number: phoneNumber || "",
+
+      created_at: new Date().toISOString(),
+
+      active_plan: null,
+      next_purchase_window_ends: null,
+      withdrawal_available_at: null,
+      last_transaction_date: null,
+      last_product_purchase: null,
+
+      wallet_balance: 0,
+      total_profits: 0,
+      total_deposited: 0,
+
+      token: makeToken(),
+
+      referral_code: makeReferralCode(),
+      referrer_id: referrerId,
+      referral_count: 0
+    };
+
     const createdUser = await createUser(newUser);
 
-    // If user was referred
+    // Handle referral bonuses
     if (referrerId) {
 
       const referrer = users.find(u => u.id === referrerId);
@@ -343,7 +376,7 @@ app.post('/api/auth/register', async (req, res) => {
 
           await logTransaction(
             referrerId,
-            'referral_tier_bonus',
+            "referral_tier_bonus",
             tierBonus,
             `Tier upgrade bonus - reached ${tier.commission} commission tier`
           );
@@ -354,17 +387,17 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     return res.status(201).json({
-      message: 'User created',
+      message: "User created",
       token: createdUser.token,
       userId: createdUser.id
     });
 
   } catch (err) {
 
-    console.error('Registration error:', err);
+    console.error("Registration error:", err);
 
     return res.status(500).json({
-      message: 'Registration failed'
+      message: "Registration failed"
     });
 
   }
@@ -1648,6 +1681,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
