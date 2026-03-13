@@ -40,10 +40,7 @@ if (supabaseUrl && supabaseKey) {
 /* ===== NOTCHPAY INITIALIZATION ===== */
 
 const notchpayPublicKey = process.env.NOTCHPAY_PUBLIC_KEY;
-const notchpaySecretKey = fs
-  .readFileSync("/etc/secrets/NOTCHPAY_PRIVATE_KEY")
-  .toString()
-  .trim();
+const NOTCHPAY_API_KEY = process.env.NOTCHPAY_API_KEY;
 const notchpayHashKey = process.env.NOTCHPAY_HASH_KEY;
 
 if (!notchpaySecretKey) {
@@ -1716,6 +1713,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
