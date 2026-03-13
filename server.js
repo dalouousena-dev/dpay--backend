@@ -624,7 +624,7 @@ app.post('/api/plans/purchase', async (req, res) => {
     saveUsers();
 
     // Create NotchPay payment
-    const notchResponse = await fetch("https://api.notchpay.co/payments", {
+   const notchResponse = await fetch("https://api.notchpay.co/v1/payments", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -643,12 +643,16 @@ app.post('/api/plans/purchase', async (req, res) => {
 
     console.log("NotchPay response:", notchData);
 
-    if (!notchData?.data?.authorization_url) {
-      return res.status(500).json({
-        message: "Failed to create payment session",
-        notchError: notchData
-      });
-    }
+   if (!notchData?.data?.authorization_url) {
+
+  console.error("NotchPay error response:", notchData);
+
+  return res.status(500).json({
+    message: "Failed to create payment session",
+    notchResponse: notchData
+  });
+
+}
 
     return res.json({
       success: true,
@@ -1597,6 +1601,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
