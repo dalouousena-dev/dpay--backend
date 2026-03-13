@@ -602,7 +602,7 @@ app.post('/api/plans/purchase', async (req, res) => {
 
     console.log("TOKEN RECEIVED:", token);
 
-    // 🔹 Get user from Supabase
+    // 🔹 Find user in Supabase
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
@@ -641,17 +641,24 @@ app.post('/api/plans/purchase', async (req, res) => {
       });
     }
 
-    console.log("NOTCHPAY_API_KEY:", process.env.NOTCHPAY_API_KEY ? "Loaded" : "Missing");
     console.log("USER EMAIL:", user.email);
     console.log("PLAN:", planId);
     console.log("AMOUNT:", numericAmount);
 
-    // 🔹 Create NotchPay payment
-    const notchResponse = await fetch("https://api.notchpay.co/payments/initialize", {
+    // 🔹 Detect environment (sandbox or production)
+    const apiKey = process.env.NOTCHPAY_API_KEY;
+    const endpoint = apiKey.startsWith("sk_test")
+      ? "https://sandbox.notchpay.co/payments/initialize"
+      : "https://api.notchpay.co/payments/initialize";
+
+    console.log("NOTCHPAY ENDPOINT:", endpoint);
+
+    // 🔹 Create payment session
+    const notchResponse = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.NOTCHPAY_API_KEY}`
+        "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         amount: numericAmount,
@@ -661,19 +668,22 @@ app.post('/api/plans/purchase', async (req, res) => {
           name: user.username || "Customer"
         },
         reference: `plan_${planId}_${Date.now()}`,
-        callback: "https://dpaybackend.onrender.com/api/payments/verify",
+        callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
         description: `Purchase of plan ${planId}`
       })
     });
 
     if (!notchResponse.ok) {
+
       const errorText = await notchResponse.text();
+
       console.error("❌ NotchPay HTTP error:", errorText);
 
       return res.status(500).json({
         message: "Failed to create payment session",
         notchError: errorText
       });
+
     }
 
     const notchData = await notchResponse.json();
@@ -1706,6 +1716,7 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
 
 
 
