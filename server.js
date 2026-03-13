@@ -657,6 +657,7 @@ app.post('/api/plans/purchase', async (req, res) => {
     console.log("NOTCHPAY ENDPOINT:", endpoint);
 
     // 🔹 Create payment on NotchPay
+    console.log("NOTCHPAY KEY PREFIX:", apiKey?.slice(0,5));
     const notchResponse = await fetch(endpoint, {
       method: "POST",
       headers: {
