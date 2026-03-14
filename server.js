@@ -603,9 +603,7 @@ app.post('/api/plans/purchase', async (req, res) => {
       });
     }
 
-    console.log("TOKEN RECEIVED:", token);
-
-    // 🔹 Get user from Supabase
+    // 🔹 Get user
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
@@ -613,13 +611,10 @@ app.post('/api/plans/purchase', async (req, res) => {
       .single();
 
     if (error || !user) {
-      console.log("USER NOT FOUND FOR TOKEN:", token);
       return res.status(401).json({
         message: "Invalid token or user not found"
       });
     }
-
-    console.log("USER FOUND:", user.email);
 
     const { planId, amount } = req.body;
 
@@ -640,24 +635,18 @@ app.post('/api/plans/purchase', async (req, res) => {
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
     if (!apiKey) {
-      console.error("NOTCHPAY_API_KEY missing");
       return res.status(500).json({
         message: "Payment gateway not configured"
       });
     }
 
-    console.log("NOTCHPAY KEY PREFIX:", apiKey.slice(0,5));
-
     const endpoint = "https://api.notchpay.co/payments";
 
-    console.log("NOTCHPAY ENDPOINT:", endpoint);
-
-    // 🔹 Create payment on NotchPay
     const notchResponse = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
+        Authorization: apiKey
       },
       body: JSON.stringify({
         amount: numericAmount,
@@ -683,7 +672,6 @@ app.post('/api/plans/purchase', async (req, res) => {
       });
     }
 
-    // 🔹 Correct field from NotchPay response
     const paymentUrl = notchData.authorization_url;
 
     if (!paymentUrl) {
@@ -693,7 +681,6 @@ app.post('/api/plans/purchase', async (req, res) => {
       });
     }
 
-    // 🔹 Send payment URL to frontend
     return res.json({
       success: true,
       paymentUrl
@@ -701,7 +688,7 @@ app.post('/api/plans/purchase', async (req, res) => {
 
   } catch (error) {
 
-    console.error("❌ Purchase initialization error:", error);
+    console.error("Purchase initialization error:", error);
 
     return res.status(500).json({
       message: "Server error while initializing purchase",
@@ -814,7 +801,7 @@ app.post("/api/payments/verify", async (req, res) => {
       {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: apiKey,
           "Content-Type": "application/json"
         }
       }
@@ -843,7 +830,6 @@ app.post("/api/payments/verify", async (req, res) => {
     // 🔹 Extract planId from reference
     // reference format: plan_vip2_123456789
     const referenceParts = transaction.reference.split("_");
-
     const planId = referenceParts[1];
 
     const userEmail = transaction.customer_email || null;
@@ -889,7 +875,7 @@ app.post("/api/payments/verify", async (req, res) => {
     });
 
   }
-});
+});;
 
 // NotchPay Webhook - Handle payment success/failure events
 app.post('/api/webhooks/notchpay', async (req, res) => {
