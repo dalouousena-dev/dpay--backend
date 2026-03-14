@@ -634,6 +634,8 @@ app.post("/api/plans/purchase", async (req, res) => {
     description: `Purchase of plan ${planId}`,
     reference: `plan_${planId}_${Date.now()}`,
     callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
+    success_url: "https://computerarchi.com/Dpay/dashboard",
+    cancel_url: "https://computerarchi.com/Dpay/dashboard",
     customer: {
       email: user.email,
       name: user.username
@@ -699,6 +701,7 @@ app.post("/api/plans/purchase", async (req, res) => {
 
   }
 });
+
 app.get("/api/payments/verify", async (req, res) => {
 
   try {
@@ -739,10 +742,12 @@ app.get("/api/payments/verify", async (req, res) => {
 
     const transaction = verifyData.transaction;
 
-    if (!transaction) {
-      console.log("❌ Transaction missing");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-    }
+const transaction = verifyData.transaction || verifyData;
+
+if (!["complete","completed","success"].includes(transaction.status)) {
+  console.log("⏳ Transaction not complete:", transaction.status);
+  return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
+}
 
    if (!["complete","completed","success"].includes(transaction.status)) {
       console.log("⏳ Transaction not complete:", transaction.status);
@@ -755,9 +760,10 @@ app.get("/api/payments/verify", async (req, res) => {
     const planId = parts[1];
 
     const email =
-      transaction.customer_email ||
-      transaction.customer?.email ||
-      null;
+  transaction.customer_email ||
+  transaction.customer?.email ||
+  verifyData.customer?.email ||
+  null;
 
     if (!email) {
       console.log("❌ Missing email");
