@@ -597,20 +597,19 @@ app.post('/api/plans/purchase', async (req, res) => {
 
     const token = authHeader.replace("Bearer ", "").trim();
 
-    console.log("TOKEN RECEIVED:", token);
-
     if (!token) {
       return res.status(401).json({
         message: "Invalid token"
       });
     }
 
+    console.log("TOKEN RECEIVED:", token);
+
     // 🔹 Get user from Supabase
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
       .eq("token", token)
-      .limit(1)
       .single();
 
     if (error || !user) {
@@ -647,36 +646,19 @@ app.post('/api/plans/purchase', async (req, res) => {
       });
     }
 
-    console.log("NOTCHPAY_API_KEY:", apiKey ? "Loaded" : "Missing");
+    console.log("NOTCHPAY KEY PREFIX:", apiKey.slice(0,5));
 
-    // 🔹 Choose endpoint depending on key type
-    const endpoint = apiKey.startsWith("sk_test")
-      ? "https://sandbox.notchpay.co/payments"
-      : "https://api.notchpay.co/payments";
+    const endpoint = "https://api.notchpay.co/payments";
 
     console.log("NOTCHPAY ENDPOINT:", endpoint);
 
     // 🔹 Create payment on NotchPay
-   console.log("NOTCHPAY KEY PREFIX:", apiKey?.slice(0,5));
-
-const notchResponse = await fetch(endpoint, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: apiKey
-  },
-  body: JSON.stringify({
-    amount: numericAmount,
-    currency: "XAF",
-    customer: {
-      email: user.email,
-      name: user.username || "Customer"
-    },
-    reference: `plan_${planId}_${Date.now()}`,
-    callback: "https://dpaybackend.onrender.com/api/payments/verify",
-    description: `Purchase of plan ${planId}`
-  })
-});
+    const notchResponse = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
       body: JSON.stringify({
         amount: numericAmount,
         currency: "XAF",
@@ -687,24 +669,24 @@ const notchResponse = await fetch(endpoint, {
         reference: `plan_${planId}_${Date.now()}`,
         callback: "https://dpaybackend.onrender.com/api/payments/verify",
         description: `Purchase of plan ${planId}`
-      });
-
-    if (!notchResponse.ok) {
-      const errorText = await notchResponse.text();
-
-      console.error("❌ NotchPay HTTP error:", errorText);
-
-      return res.status(500).json({
-        message: "Failed to create payment session",
-        notchError: errorText
-      });
-    }
+      })
+    });
 
     const notchData = await notchResponse.json();
 
     console.log("NotchPay response:", notchData);
 
-    if (!notchData?.data?.checkout_url) {
+    if (!notchResponse.ok) {
+      return res.status(500).json({
+        message: "Failed to create payment session",
+        notchError: notchData
+      });
+    }
+
+    // 🔹 Correct field from NotchPay response
+    const paymentUrl = notchData.authorization_url;
+
+    if (!paymentUrl) {
       return res.status(500).json({
         message: "Payment URL not received",
         notchError: notchData
@@ -714,7 +696,7 @@ const notchResponse = await fetch(endpoint, {
     // 🔹 Send payment URL to frontend
     return res.json({
       success: true,
-      paymentUrl: notchData.data.checkout_url
+      paymentUrl
     });
 
   } catch (error) {
