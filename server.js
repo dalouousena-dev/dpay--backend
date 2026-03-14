@@ -686,20 +686,15 @@ app.post("/api/plans/purchase", async (req, res) => {
 
   }
 });
-
 app.get("/api/payments/verify", async (req, res) => {
 
   try {
 
     const reference = req.query.reference || req.query.trxref;
 
-if (!transaction) {
-  return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-}
-
-if (transaction.status !== "complete") {
-  return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
-}
+    if (!reference) {
+      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+    }
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
@@ -722,15 +717,16 @@ if (transaction.status !== "complete") {
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-const transaction = verifyData.transaction;   // define first
+    /* CREATE transaction FIRST */
+    const transaction = verifyData.transaction;
 
-if (!transaction) {
-  return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-}
+    if (!transaction) {
+      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+    }
 
-if (transaction.status !== "complete") {
-  return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
-}
+    if (transaction.status !== "complete") {
+      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
+    }
 
     const amount = Number(transaction.amount);
 
@@ -739,54 +735,41 @@ if (transaction.status !== "complete") {
 
     const email =
       transaction.customer_email ||
-      transaction.customer?.email ||
-      null;
+      transaction.customer?.email;
 
     if (!email) {
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-    // prevent duplicate transactions
-    const { data: existingTransaction } = await supabase
-      .from("transactions")
+    const { data: user } = await supabase
+      .from("users")
       .select("*")
-      .eq("reference", transaction.reference)
-      .maybeSingle();
+      .eq("email", email)
+      .single();
 
-    if (!existingTransaction) {
+    const newTotalDeposited = (user.total_deposited || 0) + amount;
+    const newWalletBalance = (user.wallet_balance || 0) + amount;
 
-      const { data: user } = await supabase
-        .from("users")
-        .select("*")
-        .eq("email", email)
-        .single();
+    await supabase
+      .from("users")
+      .update({
+        active_plan: planId,
+        wallet_balance: newWalletBalance,
+        total_deposited: newTotalDeposited
+      })
+      .eq("email", email);
 
-      const newTotalDeposited = (user.total_deposited || 0) + amount;
-      const newWalletBalance = (user.wallet_balance || 0) + amount;
-
-      await supabase
-        .from("users")
-        .update({
-          active_plan: planId,
-          wallet_balance: newWalletBalance,
-          total_deposited: newTotalDeposited,
-          withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        })
-        .eq("email", email);
-
-      await supabase
-        .from("transactions")
-        .insert({
-          user_email: email,
-          type: "plan_purchase",
-          description: `Purchase of plan ${planId}`,
-          amount: amount,
-          status: "completed",
-          reference: transaction.reference,
-          at: new Date()
-        });
-
-    }
+    await supabase
+      .from("transactions")
+      .insert({
+        user_email: email,
+        type: "plan_purchase",
+        description: `Purchase of plan ${planId}`,
+        amount: amount,
+        status: "completed",
+        reference: transaction.reference,
+        at: new Date()
+      });
 
     return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=success");
 
