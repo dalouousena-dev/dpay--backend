@@ -740,8 +740,6 @@ app.get("/api/payments/verify", async (req, res) => {
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-    const transaction = verifyData.transaction;
-
 const transaction = verifyData.transaction || verifyData;
 
 if (!["complete","completed","success"].includes(transaction.status)) {
