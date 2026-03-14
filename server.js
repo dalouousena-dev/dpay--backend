@@ -555,39 +555,51 @@ app.get('/api/referral/stats', async (req, res) => {
 });
 
 app.get('/api/referral/code', async (req, res) => {
+
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
-  
+
+  if (!token) {
+    return res.status(401).json({ message: 'Missing token' });
+  }
+
   try {
-    let user;
-    user = findUserByToken(token);
-    if (!user) {
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('token', token)
-          .single();
-        if (!error && data) {
-          user = data;
-        }
-      }
+    let user = findUserByToken(token);
+
+    if (!user && supabase) {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('token', token)
+        .single();
+
+      if (!error && data) user = data;
     }
+
     if (!user) {
-      return res.status(401).json({ message: 'Invalid or missing token' });
+      return res.status(401).json({ message: 'Invalid token' });
     }
 
     const referralCode = user.referral_code || user.referralCode;
-   const referralLink = `${process.env.FRONTEND_URL || 'https://computerarchi.com/Dpay'}/#/register?ref=${referralCode}`;
+
+    if (!referralCode) {
+      return res.status(400).json({ message: 'Referral code missing' });
+    }
+
+    const referralLink =
+      `${process.env.FRONTEND_URL || 'https://computerarchi.com/Dpay'}/#/register?ref=${referralCode}`;
+
     res.json({
-      referralCode: referralCode,
-      referralLink: referralLink,
+      referralCode,
+      referralLink
     });
+
   } catch (err) {
-    console.error('Error fetching referral code:', err);
-    res.status(500).json({ message: 'Error fetching referral code' });
+    console.error('Referral code error:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 // --- plan purchase endpoints ---
 app.post("/api/plans/purchase", async (req, res) => {
@@ -621,7 +633,7 @@ app.post("/api/plans/purchase", async (req, res) => {
         currency: "XAF",
         description: `Purchase of plan ${planId}`,
         reference: `plan_${planId}_${Date.now()}`,
-        callback: "https://dpaybackend.onrender.com/api/payments/verify",
+        callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
         customer: {
           email: user.email,
           name: user.username
@@ -660,7 +672,7 @@ app.post("/api/plans/purchase", async (req, res) => {
     const response = await fetch("https://apisandbox.notchpay.co/payments", {
       method: "POST",
      headers: {
-  Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+  Authorization: process.env.NOTCHPAY_API_KEY,
   "Content-Type": "application/json"
 },
       body: JSON.stringify({
@@ -731,7 +743,7 @@ app.get("/api/payments/verify", async (req, res) => {
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-    if (transaction.status !== "complete") {
+   if (!["complete","completed","success"].includes(transaction.status)) {
       console.log("⏳ Transaction not complete:", transaction.status);
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
     }
@@ -780,13 +792,14 @@ app.get("/api/payments/verify", async (req, res) => {
     const newTotalDeposited = (user.total_deposited || 0) + amount;
     const newWalletBalance = (user.wallet_balance || 0) + amount;
 
-    await supabase
-      .from("users")
-      .update({
-        active_plan: planId,
-        wallet_balance: newWalletBalance,
-        total_deposited: newTotalDeposited
-      })
+   await supabase
+  .from("users")
+  .update({
+    active_plan: planId,
+    wallet_balance: newWalletBalance,
+    total_deposited: newTotalDeposited,
+    withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+  })
       .eq("email", email);
 
     await supabase
@@ -814,48 +827,13 @@ app.get("/api/payments/verify", async (req, res) => {
   }
 
 });
-
-app.post('/api/payments/create', async (req, res) => {
-  try {
-
-    const { amount, email } = req.body;
-
-    const response = await fetch("https://api.notchpay.co/payments", {
-      method: "POST",
-    headers: {
-  Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`,
-  "Content-Type": "application/json"
-},
-      body: JSON.stringify({
-        amount,
-        currency: "XAF",
-        customer: { email },
-        reference: `payment_${Date.now()}`,
-        callback: "https://dpaybackend.onrender.com/api/payments/verify"
-      })
-    });
-
-    const data = await response.json();
-
-    return res.json(data);
-
-  } catch (error) {
-
-    console.error("❌ Payment creation error:", error);
-
-    res.status(500).json({
-      message: "Failed to create payment"
-    });
-
-  }
-});
   /* =========================
      MOBILE MONEY / DIRECT
   ========================= */
 
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
-app.post("app.get", async (req, res) => {
+app.post("/api/payments/verify-webhook", async (req, res) => {
   try {
 
     console.log("🔔 NotchPay callback received:", req.body);
@@ -890,6 +868,8 @@ app.post("app.get", async (req, res) => {
 
     const verifyData = await verifyResponse.json();
 
+    console.log("NOTCHPAY VERIFY DATA:", verifyData);
+
     if (!verifyResponse.ok) {
       console.error("❌ NotchPay verification failed:", verifyData);
       return res.status(400).json({
@@ -899,7 +879,7 @@ app.post("app.get", async (req, res) => {
 
     const transaction = verifyData.transaction;
 
-    if (!transaction || transaction.status !== "complete") {
+    if (!transaction || !["complete","completed","success"].includes(transaction.status)) {
       return res.status(400).json({
         message: "Payment not completed"
       });
@@ -907,8 +887,8 @@ app.post("app.get", async (req, res) => {
 
     const amount = Number(transaction.amount);
 
-    const parts = transaction.reference.split("_");
-    const planId = parts[1];
+    const parts = transaction.reference ? transaction.reference.split("_") : [];
+    const planId = parts[1] || null;
 
     const email =
       transaction.customer_email ||
@@ -921,7 +901,6 @@ app.post("app.get", async (req, res) => {
       });
     }
 
-    // prevent duplicate transaction
     const { data: existingTransaction } = await supabase
       .from("transactions")
       .select("*")
@@ -936,7 +915,6 @@ app.post("app.get", async (req, res) => {
       });
     }
 
-    // get user
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
@@ -950,7 +928,6 @@ app.post("app.get", async (req, res) => {
       });
     }
 
-    // IMPORTANT: use snake_case column names
     const newTotalDeposited = (user.total_deposited || 0) + amount;
     const newWalletBalance = (user.wallet_balance || 0) + amount;
 
@@ -971,7 +948,6 @@ app.post("app.get", async (req, res) => {
       });
     }
 
-    // save transaction
     const { error: insertError } = await supabase
       .from("transactions")
       .insert({
@@ -1005,6 +981,7 @@ app.post("app.get", async (req, res) => {
 
   }
 });
+
 
 app.get("/api/transactions", async (req, res) => {
   try {
