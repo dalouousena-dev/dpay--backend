@@ -687,6 +687,111 @@ app.post("/api/plans/purchase", async (req, res) => {
   }
 });
 
+app.get("/api/payments/verify", async (req, res) => {
+
+  try {
+
+    const reference = req.query.reference || req.query.trxref;
+
+    if (!reference) {
+      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+    }
+
+    const apiKey = process.env.NOTCHPAY_API_KEY;
+
+    const endpoint = apiKey.startsWith("sk_test")
+      ? `https://sandbox.notchpay.co/payments/${reference}`
+      : `https://api.notchpay.co/payments/${reference}`;
+
+    const verifyResponse = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json"
+      }
+    });
+
+    const verifyData = await verifyResponse.json();
+
+    if (!verifyResponse.ok) {
+      console.error("Verification failed:", verifyData);
+      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+    }
+
+    const transaction = verifyData.transaction;
+
+    if (!transaction || transaction.status !== "complete") {
+      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
+    }
+
+    const amount = Number(transaction.amount);
+
+    const parts = transaction.reference.split("_");
+    const planId = parts[1];
+
+    const email =
+      transaction.customer_email ||
+      transaction.customer?.email ||
+      null;
+
+    if (!email) {
+      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+    }
+
+    // prevent duplicate transactions
+    const { data: existingTransaction } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("reference", transaction.reference)
+      .maybeSingle();
+
+    if (!existingTransaction) {
+
+      const { data: user } = await supabase
+        .from("users")
+        .select("*")
+        .eq("email", email)
+        .single();
+
+      const newTotalDeposited = (user.total_deposited || 0) + amount;
+      const newWalletBalance = (user.wallet_balance || 0) + amount;
+
+      await supabase
+        .from("users")
+        .update({
+          active_plan: planId,
+          wallet_balance: newWalletBalance,
+          total_deposited: newTotalDeposited,
+          withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        })
+        .eq("email", email);
+
+      await supabase
+        .from("transactions")
+        .insert({
+          user_email: email,
+          type: "plan_purchase",
+          description: `Purchase of plan ${planId}`,
+          amount: amount,
+          status: "completed",
+          reference: transaction.reference,
+          at: new Date()
+        });
+
+    }
+
+    return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=success");
+
+  } catch (err) {
+
+    console.error("Verification error:", err);
+
+    return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+
+  }
+
+});
+
 app.post('/api/payments/create', async (req, res) => {
   try {
 
@@ -727,7 +832,7 @@ app.post('/api/payments/create', async (req, res) => {
 
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
-app.post("/api/payments/verify", async (req, res) => {
+app.post("app.get", async (req, res) => {
   try {
 
     console.log("🔔 NotchPay callback received:", req.body);
