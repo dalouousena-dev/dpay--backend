@@ -333,7 +333,7 @@ app.post('/api/auth/register', async (req, res) => {
 
       created_at: new Date().toISOString(),
 
-      active_plan: null,
+      activeplan: null,
       next_purchase_window_ends: null,
       withdrawal_available_at: null,
       last_transaction_date: null,
@@ -498,7 +498,7 @@ app.get('/api/users/profile', async (req, res) => {
     // 🔵 map database field to frontend field
     const formattedUser = {
       ...publicData,
-      activePlan: publicData.active_plan || null
+      activePlan: publicData.activeplan || null
     };
 
     return res.json(formattedUser);
@@ -779,7 +779,7 @@ app.post("/api/payments/verify", async (req, res) => {
     await supabase
       .from("users")
       .update({
-        active_plan: planId,
+        activeplan: planId,
         plan_activated_at: new Date()
       })
       .eq("email", email);
@@ -932,7 +932,7 @@ app.post('/api/webhooks/notchpay', async (req, res) => {
       console.log(`📦 Activating ${planId} plan for ${amount} FCFA`);
       
       user.wallet_balance = (user.wallet_balance || 0) + amount;
-      user.active_plan = planId;
+      user.activeplan = planId;
       user.total_deposited = (user.total_deposited || 0) + amount;
       user.last_transaction_date = now.toISOString();
       user.withdrawal_available_at = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -972,7 +972,7 @@ app.post('/api/webhooks/notchpay', async (req, res) => {
         supabase
           .from('users')
           .update({
-            active_plan: user.active_plan,
+            activeplan: user.activeplan,
             wallet_balance: user.wallet_balance,
             total_deposited: user.total_deposited,
             withdrawal_available_at: user.withdrawal_available_at,
@@ -1381,7 +1381,7 @@ app.get('/api/admin/users', async (req, res) => {
           email: u.email,
           username: u.username,
           phoneNumber: u.phone_number,
-          activePlan: u.active_plan,
+          activePlan: u.activeplan,
           nextPurchaseWindowEnds: u.next_purchase_window_ends,
           withdrawalAvailableAt: u.withdrawal_available_at,
           createdAt: u.created_at,
