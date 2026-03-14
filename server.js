@@ -638,7 +638,7 @@ body: JSON.stringify({
 
   success_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=success",
 
-  cancel_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=error",
+  cancel_redirect_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=error",
 
   customer: {
     email: user.email,
