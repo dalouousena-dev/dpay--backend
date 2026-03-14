@@ -620,55 +620,69 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     const { planId, amount } = req.body;
 
-    const apiKey = process.env.NOTCHPAY_API_KEY;
+    // 🔑 Generate reference on your server
+    const reference = `plan_${planId}_${Date.now()}`;
 
-  const response = await fetch("https://api.notchpay.co/payments", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: process.env.NOTCHPAY_API_KEY
-  },
-body: JSON.stringify({
-  amount: amount,
-  currency: "XAF",
-  reference: `plan_${Date.now()}`,
-  description: `Purchase of plan ${planId}`,
+    console.log("Creating payment:", {
+      user: user.email,
+      planId,
+      amount,
+      reference
+    });
 
-  callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
+    const response = await fetch("https://api.notchpay.co/payments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: process.env.NOTCHPAY_API_KEY
+      },
+      body: JSON.stringify({
+        amount: amount,
+        currency: "XAF",
 
-  success_redirect_url: "https://computerarchi.com/Dpay/dashboard",
+        reference: reference,
 
-    cancel_redirect_url: "https://computerarchi.com/Dpay/dashboard",
+        description: `Purchase of plan ${planId}`,
 
-  customer: {
-    email: user.email,
-    name: user.username
-  },
+        callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
 
-  metadata: {
-    planId: planId,
-    userEmail: user.email
-  }
-})
+        success_redirect_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=success",
 
+        cancel_redirect_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=error",
 
-});
+        customer: {
+          email: user.email,
+          name: user.username
+        },
 
+        metadata: {
+          planId: planId,
+          email: user.email
+        }
+      })
+    });
 
     const data = await response.json();
 
+    console.log("NotchPay response:", data);
+
     if (!data.authorization_url) {
       return res.status(500).json({
-        message: "Payment URL not received"
+        message: "Payment URL not received",
+        notchpay: data
       });
     }
 
+    // 🚀 Return reference so frontend can track payment
     res.json({
       success: true,
-      paymentUrl: data.authorization_url
+      paymentUrl: data.authorization_url,
+      reference: reference
     });
 
   } catch (err) {
+
+    console.error("Payment initialization failed:", err);
 
     res.status(500).json({
       message: "Payment initialization failed"
@@ -676,6 +690,7 @@ body: JSON.stringify({
 
   }
 });
+
     // Create NotchPay payment
     
   app.post('/api/payments/create', async (req, res) => {
@@ -847,6 +862,33 @@ if (!planId && transaction.reference) {
   }
 
 });
+
+app.get("/api/payments/check/:reference", async (req, res) => {
+
+  const reference = req.params.reference;
+
+  const endpoint = `https://sandbox.notchpay.co/payments/${reference}`;
+
+  const response = await fetch(endpoint, {
+    headers: {
+      Authorization: process.env.NOTCHPAY_API_KEY
+    }
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return res.status(400).json({ message: "Verification failed" });
+  }
+
+  const transaction = data.transaction || data;
+
+  res.json({
+    status: transaction.status
+  });
+
+});
+
   /* =========================
      MOBILE MONEY / DIRECT
   ========================= */
