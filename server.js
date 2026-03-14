@@ -333,7 +333,7 @@ app.post('/api/auth/register', async (req, res) => {
 
       created_at: new Date().toISOString(),
 
-      activeplan: null,
+      active_plan: null,
       next_purchase_window_ends: null,
       withdrawal_available_at: null,
       last_transaction_date: null,
@@ -498,7 +498,7 @@ app.get('/api/users/profile', async (req, res) => {
     // 🔵 map database field to frontend field
     const formattedUser = {
       ...publicData,
-      activePlan: publicData.activeplan || null
+      activePlan: publicData.active_plan || null
     };
 
     return res.json(formattedUser);
@@ -779,7 +779,7 @@ app.post("/api/payments/verify", async (req, res) => {
     await supabase
       .from("users")
       .update({
-        activeplan: planId,
+        active_plan: planId,
         plan_activated_at: new Date()
       })
       .eq("email", email);
@@ -932,7 +932,7 @@ app.post('/api/webhooks/notchpay', async (req, res) => {
       console.log(`📦 Activating ${planId} plan for ${amount} FCFA`);
       
       user.wallet_balance = (user.wallet_balance || 0) + amount;
-      user.activeplan = planId;
+      user.active_plan = planId;
       user.total_deposited = (user.total_deposited || 0) + amount;
       user.last_transaction_date = now.toISOString();
       user.withdrawal_available_at = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -972,7 +972,7 @@ app.post('/api/webhooks/notchpay', async (req, res) => {
         supabase
           .from('users')
           .update({
-            activeplan: user.activeplan,
+            active_plan: user.active_plan,
             wallet_balance: user.wallet_balance,
             total_deposited: user.total_deposited,
             withdrawal_available_at: user.withdrawal_available_at,
@@ -1189,7 +1189,7 @@ app.post('/api/products/buy', async (req, res) => {
   if (!product) return res.status(404).json({ message: 'Product not found' });
 
   // ensure user has required VIP level
-  if (product.minVip && vipLevel(user.activePlan) < vipLevel(product.minVip)) {
+  if (product.minVip && vipLevel(user.active_Plan) < vipLevel(product.minVip)) {
     return res.status(403).json({ message: `Requires ${product.minVip.toUpperCase()} membership` });
   }
 
@@ -1204,7 +1204,7 @@ app.post('/api/products/buy', async (req, res) => {
   }
   
   // Apply VIP purchase discount
-  const vipBenefits = getVipBenefits(user.activePlan);
+  const vipBenefits = getVipBenefits(user.active_Plan);
   const discountAmount = Math.floor(product.price * vipBenefits.purchaseDiscount);
   const finalPrice = product.price - discountAmount;
   
@@ -1265,7 +1265,7 @@ app.post('/api/products/sell', async (req, res) => {
 
   // compute sale amount (platform buys back at 80% of price + VIP sell bonus)
   const baseAmount = Math.floor(product.price * 0.8);
-  const vipBenefits = getVipBenefits(user.activePlan);
+  const vipBenefits = getVipBenefits(user.active_Plan);
   const bonusAmount = Math.floor(baseAmount * vipBenefits.sellBonus);
   const saleAmount = baseAmount + bonusAmount;
   user.walletBalance = (user.walletBalance || 0) + saleAmount;
@@ -1381,7 +1381,7 @@ app.get('/api/admin/users', async (req, res) => {
           email: u.email,
           username: u.username,
           phoneNumber: u.phone_number,
-          activePlan: u.activeplan,
+          active_Plan: u.active_plan,
           nextPurchaseWindowEnds: u.next_purchase_window_ends,
           withdrawalAvailableAt: u.withdrawal_available_at,
           createdAt: u.created_at,
@@ -1404,7 +1404,7 @@ app.get('/api/admin/users', async (req, res) => {
       email: u.email,
       username: u.username,
       phoneNumber: u.phoneNumber,
-      activePlan: u.activePlan,
+      active_Plan: u.active_Plan,
       nextPurchaseWindowEnds: u.nextPurchaseWindowEnds,
       withdrawalAvailableAt: u.withdrawalAvailableAt,
       createdAt: u.createdAt,
