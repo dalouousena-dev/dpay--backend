@@ -787,96 +787,108 @@ app.post('/api/payments/create', async (req, res) => {
 
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
-app.post('/api/payments/verify', async (req, res) => {
+app.post("/api/payments/verify", async (req, res) => {
+  try {
 
-  const authHeader = req.headers.authorization || "";
+    console.log("🔔 NotchPay callback received:", req.body);
 
-  if (!authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Missing authorization token" });
-  }
+    const { reference, status } = req.body;
 
-  const token = authHeader.replace("Bearer ", "").trim();
-
-  let user = findUserByToken(token);
-
-  // If not found locally, check Supabase
-  if (!user && supabase) {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('token', token)
-      .maybeSingle();
-
-    if (!error && data) {
-      user = data;
+    if (!reference) {
+      return res.status(400).json({
+        message: "Transaction reference missing"
+      });
     }
-  }
 
-  if (!user) {
-    return res.status(401).json({ message: "Invalid token or user not found" });
-  }
+    const apiKey = process.env.NOTCHPAY_API_KEY;
 
-  const { paymentId } = req.body;
+    if (!apiKey) {
+      return res.status(500).json({
+        message: "Payment gateway not configured"
+      });
+    }
 
-  if (!paymentId) {
-    return res.status(400).json({ message: "Missing paymentId" });
-  }
+    // 🔹 Verify payment with NotchPay
+    const verifyResponse = await fetch(
+      `https://api.notchpay.co/payments/${reference}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
 
-  if (!user.pendingPurchase) {
-    return res.status(404).json({ message: "Pending purchase not found" });
-  }
+    const verifyData = await verifyResponse.json();
 
-  const now = new Date();
+    console.log("🔎 NotchPay verification response:", verifyData);
 
-  user.pendingPurchase.verified = true;
+    if (!verifyResponse.ok) {
+      return res.status(400).json({
+        message: "Failed to verify transaction",
+        error: verifyData
+      });
+    }
 
-  user.activePlan = user.pendingPurchase.planId;
-  user.walletBalance = (user.walletBalance || 0) + user.pendingPurchase.amount;
-  user.totalDeposited = (user.totalDeposited || 0) + user.pendingPurchase.amount;
+    const transaction = verifyData.transaction;
 
-  user.lastTransactionDate = now.toISOString();
+    if (!transaction || transaction.status !== "complete") {
+      return res.status(400).json({
+        message: "Payment not completed",
+        transaction
+      });
+    }
 
-  user.withdrawalAvailableAt = new Date(
-    now.getTime() + 30 * 24 * 60 * 60 * 1000
-  ).toISOString();
+    // 🔹 Extract planId from reference
+    // reference format: plan_vip2_123456789
+    const referenceParts = transaction.reference.split("_");
 
-  user.transactions = user.transactions || [];
+    const planId = referenceParts[1];
 
-  user.transactions.push({
-    id: crypto.randomBytes(8).toString('hex'),
-    type: 'plan_purchase',
-    planId: user.pendingPurchase.planId,
-    amount: user.pendingPurchase.amount,
-    paymentMethod: user.pendingPurchase.paymentMethod,
-    at: now.toISOString()
-  });
+    const userEmail = transaction.customer_email || null;
 
-  delete user.pendingPurchase;
+    if (!planId) {
+      return res.status(400).json({
+        message: "Plan ID not found in reference"
+      });
+    }
 
-  saveUsers();
+    console.log("PLAN PURCHASED:", planId);
 
-  // Update Supabase
-  if (supabase && user.id) {
-
-    await supabase
-      .from('users')
+    // 🔹 Activate plan in database
+    const { error } = await supabase
+      .from("users")
       .update({
-        active_plan: user.activePlan,
-        wallet_balance: user.walletBalance,
-        total_deposited: user.totalDeposited,
-        withdrawal_available_at: user.withdrawalAvailableAt,
-        last_transaction_date: user.lastTransactionDate
+        active_plan: planId,
+        plan_activated_at: new Date()
       })
-      .eq('id', user.id);
+      .eq("email", userEmail);
+
+    if (error) {
+      console.error("❌ Failed to activate plan:", error);
+      return res.status(500).json({
+        message: "Failed to activate plan"
+      });
+    }
+
+    console.log("✅ Plan activated for user:", userEmail);
+
+    return res.json({
+      success: true,
+      message: "Payment verified and plan activated"
+    });
+
+  } catch (error) {
+
+    console.error("❌ Payment verification error:", error);
+
+    return res.status(500).json({
+      message: "Server error during verification",
+      error: error.message
+    });
 
   }
-
-  return res.json({
-    message: "Payment verified and plan activated",
-    withdrawalAvailableAt: user.withdrawalAvailableAt,
-    walletBalance: user.walletBalance
-  });
-
 });
 
 // NotchPay Webhook - Handle payment success/failure events
