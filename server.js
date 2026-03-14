@@ -722,8 +722,6 @@ if (transaction.status !== "complete") {
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-const verifyData = await verifyResponse.json();
-
 const transaction = verifyData.transaction;   // define first
 
 if (!transaction) {
