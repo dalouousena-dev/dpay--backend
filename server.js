@@ -631,6 +631,7 @@ app.post("/api/plans/purchase", async (req, res) => {
   body: JSON.stringify({
   amount: amount,
   currency: "XAF",
+  description: `Purchase of plan ${planId}`,
   reference: `plan_${planId}_${Date.now()}`,
   callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
 
@@ -640,7 +641,8 @@ app.post("/api/plans/purchase", async (req, res) => {
   },
 
   metadata: {
-    planId: planId
+    planId: planId,
+    userEmail: user.email
   }
 })
 
@@ -757,8 +759,12 @@ if (!["complete","completed","success"].includes(transaction.status)) {
 
     const amount = Number(transaction.amount);
 
-    const parts = transaction.reference.split("_");
-    const planId = parts[1];
+let planId = transaction.metadata?.planId;
+
+if (!planId && transaction.reference) {
+  const parts = transaction.reference.split("_");
+  planId = parts[1];
+}
 
     const email =
   transaction.customer_email ||
