@@ -689,7 +689,7 @@ app.post("/api/plans/purchase", async (req, res) => {
 app.get("/api/payments/verify", async (req, res) => {
 
   try {
-
+  console.log("VERIFY QUERY:", req.query);
     const reference = req.query.reference || req.query.trxref;
 
     if (!reference) {
