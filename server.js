@@ -775,33 +775,21 @@ app.post('/api/payments/create', async (req, res) => {
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
 app.post("/api/payments/verify", async (req, res) => {
+
   try {
 
-    console.log("🔔 NotchPay callback received:", req.body);
-
-    const { reference, status } = req.body;
+    const reference = req.body.trxref || req.body.reference;
 
     if (!reference) {
-      return res.status(400).json({
-        message: "Transaction reference missing"
-      });
+      return res.status(400).json({ message: "Missing reference" });
     }
 
-    const apiKey = process.env.NOTCHPAY_API_KEY;
-
-    if (!apiKey) {
-      return res.status(500).json({
-        message: "Payment gateway not configured"
-      });
-    }
-
-    // 🔹 Verify payment with NotchPay
     const verifyResponse = await fetch(
       `https://api.notchpay.co/payments/${reference}`,
       {
         method: "GET",
         headers: {
-          Authorization: apiKey,
+          Authorization: process.env.NOTCHPAY_API_KEY,
           "Content-Type": "application/json"
         }
       }
@@ -809,76 +797,66 @@ app.post("/api/payments/verify", async (req, res) => {
 
     const verifyData = await verifyResponse.json();
 
-    console.log("🔎 NotchPay verification response:", verifyData);
-
     if (!verifyResponse.ok) {
-      return res.status(400).json({
-        message: "Failed to verify transaction",
-        error: verifyData
-      });
+      return res.status(400).json({ message: "Verification failed" });
     }
 
     const transaction = verifyData.transaction;
 
     if (!transaction || transaction.status !== "complete") {
       return res.status(400).json({
-        message: "Payment not completed",
-        transaction
+        message: "Payment not completed"
       });
     }
 
-    // 🔹 Extract planId from reference
-    // reference format: plan_vip2_123456789
-    const referenceParts = transaction.reference.split("_");
-    const planId = referenceParts[1];
+    console.log("PAYMENT VERIFIED:", transaction.reference);
 
-    const userEmail = transaction.customer_email || null;
+    // continue with activation
 
-    if (!planId) {
-      return res.status(400).json({
-        message: "Plan ID not found in reference"
-      });
-    }
+    res.json({ success: true });
 
-    console.log("PLAN PURCHASED:", planId);
+  } catch (err) {
 
-    // 🔹 Activate plan in database
-    const { error } = await supabase
-      .from("users")
-      .update({
-        active_plan: planId,
-        plan_activated_at: new Date()
-      })
-      .eq("email", userEmail);
+    console.error("Verification error:", err);
 
-    if (error) {
-      console.error("❌ Failed to activate plan:", error);
-      return res.status(500).json({
-        message: "Failed to activate plan"
-      });
-    }
-
-    console.log("✅ Plan activated for user:", userEmail);
-
-    return res.json({
-      success: true,
-      message: "Payment verified and plan activated"
-    });
-
-  } catch (error) {
-
-    console.error("❌ Payment verification error:", error);
-
-    return res.status(500).json({
-      message: "Server error during verification",
-      error: error.message
+    res.status(500).json({
+      message: "Verification failed"
     });
 
   }
-});;
+
+});
+app.get("/api/transactions", async (req, res) => {
+  try {
+
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      return res.status(500).json({
+        message: "Failed to fetch transactions",
+        error
+      });
+    }
+
+    res.json(data);
+
+  } catch (err) {
+
+    console.error("Transaction fetch error:", err);
+
+    res.status(500).json({
+      message: "Server error"
+    });
+
+  }
+});
+
 
 app.get("/api/payments/verify", (req, res) => {
-  res.redirect("https://your-frontend-domain.com/payment-success");
+  res.redirect("https://dpay.vercel.app/dashboard?payment=success");
 });
 
 
