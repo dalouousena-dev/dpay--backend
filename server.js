@@ -628,12 +628,17 @@ app.post("/api/plans/purchase", async (req, res) => {
     "Content-Type": "application/json",
     Authorization: process.env.NOTCHPAY_API_KEY
   },
-  body: JSON.stringify({
+body: JSON.stringify({
   amount: amount,
   currency: "XAF",
+  reference: `plan_${Date.now()}`,
   description: `Purchase of plan ${planId}`,
-  reference: `plan_${planId}_${Date.now()}`,
+
   callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
+
+  success_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=success",
+
+  cancel_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=error",
 
   customer: {
     email: user.email,
@@ -645,6 +650,7 @@ app.post("/api/plans/purchase", async (req, res) => {
     userEmail: user.email
   }
 })
+
 
 });
 
