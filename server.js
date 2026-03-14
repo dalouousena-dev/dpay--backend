@@ -629,18 +629,21 @@ app.post("/api/plans/purchase", async (req, res) => {
     Authorization: process.env.NOTCHPAY_API_KEY
   },
   body: JSON.stringify({
-    amount: amount,
-    currency: "XAF",
-    description: `Purchase of plan ${planId}`,
-    reference: `plan_${planId}_${Date.now()}`,
-    callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
-    success_url: "https://computerarchi.com/Dpay/dashboard",
-    cancel_url: "https://computerarchi.com/Dpay/dashboard",
-    customer: {
-      email: user.email,
-      name: user.username
-    }
-  })
+  amount: amount,
+  currency: "XAF",
+  reference: `plan_${planId}_${Date.now()}`,
+  callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
+
+  customer: {
+    email: user.email,
+    name: user.username
+  },
+
+  metadata: {
+    planId: planId
+  }
+})
+
 });
 
 
@@ -683,7 +686,7 @@ app.post("/api/plans/purchase", async (req, res) => {
         currency: "XAF",
         customer: { email },
         reference: `payment_${Date.now()}`,
-        callback: "https://dpaybackend.onrender.com/api/payments/verify"
+        callback_url: "https://dpaybackend.onrender.com/api/payments/verify"
       })
     });
 
