@@ -481,9 +481,9 @@ app.get('/api/users/profile', async (req, res) => {
       .select("*")
       .eq("token", token)
       .limit(1)
-      .single();   // 🔴 changed from maybeSingle()
+      .single();
 
-    if (error) {
+    if (error || !data) {
       console.error("Supabase error:", error);
       return res.status(401).json({
         message: "Invalid or missing token"
@@ -492,9 +492,16 @@ app.get('/api/users/profile', async (req, res) => {
 
     console.log("USER FOUND:", data.email);
 
+    // remove password
     const { password, ...publicData } = data;
 
-    return res.json(publicData);
+    // 🔵 map database field to frontend field
+    const formattedUser = {
+      ...publicData,
+      activePlan: publicData.active_plan || null
+    };
+
+    return res.json(formattedUser);
 
   } catch (err) {
 
