@@ -622,24 +622,25 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
-    const response = await fetch("https://api.notchpay.co/payments", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: apiKey
-      },
-      body: JSON.stringify({
-        amount: amount,
-        currency: "XAF",
-        description: `Purchase of plan ${planId}`,
-        reference: `plan_${planId}_${Date.now()}`,
-        callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
-        customer: {
-          email: user.email,
-          name: user.username
-        }
-      })
-    });
+  const response = await fetch("https://api.notchpay.co/payments", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: process.env.NOTCHPAY_API_KEY
+  },
+  body: JSON.stringify({
+    amount: amount,
+    currency: "XAF",
+    description: `Purchase of plan ${planId}`,
+    reference: `plan_${planId}_${Date.now()}`,
+    callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
+    customer: {
+      email: user.email,
+      name: user.username
+    }
+  })
+});
+
 
     const data = await response.json();
 
