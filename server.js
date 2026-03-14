@@ -731,7 +731,7 @@ app.post('/api/payments/create', async (req, res) => {
 app.post("/api/payments/verify", async (req, res) => {
   try {
 
-    console.log("NotchPay callback received:", req.body);
+    console.log("🔔 NotchPay callback received:", req.body);
 
     const reference = req.body.trxref || req.body.reference;
 
@@ -749,12 +749,11 @@ app.post("/api/payments/verify", async (req, res) => {
       });
     }
 
-    // choose correct endpoint
+    // choose correct endpoint depending on key
     const endpoint = apiKey.startsWith("sk_test")
       ? `https://sandbox.notchpay.co/payments/${reference}`
       : `https://api.notchpay.co/payments/${reference}`;
 
-    // verify payment with NotchPay
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
       headers: {
@@ -766,7 +765,7 @@ app.post("/api/payments/verify", async (req, res) => {
     const verifyData = await verifyResponse.json();
 
     if (!verifyResponse.ok) {
-      console.error("NotchPay verification failed:", verifyData);
+      console.error("❌ NotchPay verification failed:", verifyData);
       return res.status(400).json({
         message: "Payment verification failed"
       });
@@ -782,7 +781,7 @@ app.post("/api/payments/verify", async (req, res) => {
 
     const amount = Number(transaction.amount);
 
-    // extract plan id from reference
+    // extract plan id
     const parts = transaction.reference.split("_");
     const planId = parts[1];
 
@@ -797,7 +796,7 @@ app.post("/api/payments/verify", async (req, res) => {
       });
     }
 
-    // check duplicate transaction
+    // prevent duplicate transactions
     const { data: existingTransaction } = await supabase
       .from("transactions")
       .select("*")
@@ -805,7 +804,7 @@ app.post("/api/payments/verify", async (req, res) => {
       .maybeSingle();
 
     if (existingTransaction) {
-      console.log("Transaction already processed:", transaction.reference);
+      console.log("⚠ Transaction already processed:", transaction.reference);
       return res.json({
         success: true,
         message: "Transaction already verified"
@@ -847,7 +846,7 @@ app.post("/api/payments/verify", async (req, res) => {
       });
     }
 
-    // save transaction
+    // insert transaction history
     const { error: insertError } = await supabase
       .from("transactions")
       .insert({
@@ -864,7 +863,7 @@ app.post("/api/payments/verify", async (req, res) => {
       console.error("Transaction insert error:", insertError);
     }
 
-    console.log("Payment verified and plan activated:", email, planId);
+    console.log("✅ Payment verified and plan activated:", email, planId);
 
     return res.json({
       success: true,
@@ -873,7 +872,7 @@ app.post("/api/payments/verify", async (req, res) => {
 
   } catch (err) {
 
-    console.error("Verification error:", err);
+    console.error("❌ Verification error:", err);
 
     return res.status(500).json({
       message: "Payment verification error"
@@ -881,7 +880,6 @@ app.post("/api/payments/verify", async (req, res) => {
 
   }
 });
-
 app.get("/api/transactions", async (req, res) => {
   try {
 
