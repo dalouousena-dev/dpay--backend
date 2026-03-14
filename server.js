@@ -699,7 +699,7 @@ body: JSON.stringify({
     });
 
     const data = await response.json();
-
+    console.log("NOTCHPAY CREATE PAYMENT RESPONSE:", data);
     return res.json(data);
 
   } catch (error) {
