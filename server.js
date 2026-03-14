@@ -722,11 +722,17 @@ if (transaction.status !== "complete") {
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-    const transaction = verifyData.transaction;
+const verifyData = await verifyResponse.json();
 
-    if (!transaction || transaction.status !== "complete") {
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
-    }
+const transaction = verifyData.transaction;   // define first
+
+if (!transaction) {
+  return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+}
+
+if (transaction.status !== "complete") {
+  return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
+}
 
     const amount = Number(transaction.amount);
 
