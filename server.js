@@ -877,6 +877,11 @@ app.post("/api/payments/verify", async (req, res) => {
   }
 });;
 
+app.get("/api/payments/verify", (req, res) => {
+  res.redirect("https://your-frontend-domain.com/payment-success");
+});
+
+
 // NotchPay Webhook - Handle payment success/failure events
 app.post('/api/webhooks/notchpay', async (req, res) => {
   console.log('🔔 NotchPay webhook received');
