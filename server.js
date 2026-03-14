@@ -748,7 +748,6 @@ app.post("/api/payments/verify", async (req, res) => {
       });
     }
 
-    // choose correct endpoint depending on key
     const endpoint = apiKey.startsWith("sk_test")
       ? `https://sandbox.notchpay.co/payments/${reference}`
       : `https://api.notchpay.co/payments/${reference}`;
@@ -780,7 +779,6 @@ app.post("/api/payments/verify", async (req, res) => {
 
     const amount = Number(transaction.amount);
 
-    // extract plan id
     const parts = transaction.reference.split("_");
     const planId = parts[1];
 
@@ -795,7 +793,7 @@ app.post("/api/payments/verify", async (req, res) => {
       });
     }
 
-    // prevent duplicate transactions
+    // prevent duplicate transaction
     const { data: existingTransaction } = await supabase
       .from("transactions")
       .select("*")
@@ -824,17 +822,17 @@ app.post("/api/payments/verify", async (req, res) => {
       });
     }
 
-    const newTotalDeposited = (user.totalDeposited || 0) + amount;
-    const newWalletBalance = (user.walletBalance || 0) + amount;
+    // IMPORTANT: use snake_case column names
+    const newTotalDeposited = (user.total_deposited || 0) + amount;
+    const newWalletBalance = (user.wallet_balance || 0) + amount;
 
-    // update user
     const { error: updateError } = await supabase
       .from("users")
       .update({
         active_plan: planId,
-        walletBalance: newWalletBalance,
-        totalDeposited: newTotalDeposited,
-        plan_activated_at: new Date()
+        wallet_balance: newWalletBalance,
+        total_deposited: newTotalDeposited,
+        withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       })
       .eq("email", email);
 
@@ -845,7 +843,7 @@ app.post("/api/payments/verify", async (req, res) => {
       });
     }
 
-    // insert transaction history
+    // save transaction
     const { error: insertError } = await supabase
       .from("transactions")
       .insert({
@@ -879,6 +877,7 @@ app.post("/api/payments/verify", async (req, res) => {
 
   }
 });
+
 app.get("/api/transactions", async (req, res) => {
   try {
 
@@ -908,20 +907,52 @@ app.get("/api/transactions", async (req, res) => {
 });
 
 
-app.get("/api/payments/verify", (req, res) => {
-  res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=success");
-});
 app.get("/api/user/profile", async (req, res) => {
 
-  const token = req.headers.authorization.replace("Bearer ", "");
+  try {
 
-  const { data: user } = await supabase
-    .from("users")
-    .select("*")
-    .eq("token", token)
-    .single();
+    const auth = req.headers.authorization;
 
-  res.json(user);
+    if (!auth) {
+      return res.status(401).json({
+        message: "Missing authorization token"
+      });
+    }
+
+    const token = auth.replace("Bearer ", "");
+
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("token", token)
+      .single();
+
+    if (error || !user) {
+      return res.status(401).json({
+        message: "Invalid token"
+      });
+    }
+
+    // convert snake_case → camelCase for dashboard
+    const formattedUser = {
+      ...user,
+      walletBalance: user.wallet_balance,
+      totalDeposited: user.total_deposited,
+      activePlan: user.active_plan,
+      createdAt: user.created_at
+    };
+
+    res.json(formattedUser);
+
+  } catch (err) {
+
+    console.error("Profile error:", err);
+
+    res.status(500).json({
+      message: "Server error"
+    });
+
+  }
 
 });
 
