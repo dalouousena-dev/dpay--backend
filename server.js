@@ -693,9 +693,13 @@ app.get("/api/payments/verify", async (req, res) => {
 
     const reference = req.query.reference || req.query.trxref;
 
-    if (!reference) {
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-    }
+if (!transaction) {
+  return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+}
+
+if (transaction.status !== "complete") {
+  return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
+}
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
