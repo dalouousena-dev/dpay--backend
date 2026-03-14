@@ -636,9 +636,9 @@ body: JSON.stringify({
 
   callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
 
-  success_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=success",
+  success_redirect_url: "https://computerarchi.com/Dpay/dashboard",
 
-  cancel_redirect_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=error",
+    cancel_redirect_url: "https://computerarchi.com/Dpay/dashboard",
 
   customer: {
     email: user.email,
