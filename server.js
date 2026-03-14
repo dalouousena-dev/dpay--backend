@@ -611,7 +611,7 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
-    const response = await fetch("https://sandbox.notchpay.co/payments", {
+    const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -693,7 +693,7 @@ app.post('/api/payments/create', async (req, res) => {
 
     const { amount, email } = req.body;
 
-    const response = await fetch("https://sandbox.notchpay.co/payments", {
+    const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
     headers: {
   Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`,
