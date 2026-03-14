@@ -689,10 +689,16 @@ app.post("/api/plans/purchase", async (req, res) => {
 app.get("/api/payments/verify", async (req, res) => {
 
   try {
-  console.log("VERIFY QUERY:", req.query);
-    const reference = req.query.reference || req.query.trxref;
+
+    console.log("VERIFY QUERY:", req.query);
+
+    const reference =
+      req.query.reference ||
+      req.query.trxref ||
+      req.query.transaction_id;
 
     if (!reference) {
+      console.log("❌ Missing reference");
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
@@ -712,19 +718,21 @@ app.get("/api/payments/verify", async (req, res) => {
 
     const verifyData = await verifyResponse.json();
 
+    console.log("NOTCHPAY RESPONSE:", verifyData);
+
     if (!verifyResponse.ok) {
-      console.error("Verification failed:", verifyData);
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-    /* CREATE transaction FIRST */
     const transaction = verifyData.transaction;
 
     if (!transaction) {
+      console.log("❌ Transaction missing");
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
     if (transaction.status !== "complete") {
+      console.log("⏳ Transaction not complete:", transaction.status);
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
     }
 
@@ -735,17 +743,39 @@ app.get("/api/payments/verify", async (req, res) => {
 
     const email =
       transaction.customer_email ||
-      transaction.customer?.email;
+      transaction.customer?.email ||
+      null;
 
     if (!email) {
+      console.log("❌ Missing email");
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-    const { data: user } = await supabase
+    // prevent duplicate transaction
+    const { data: existing } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("reference", transaction.reference)
+      .maybeSingle();
+
+    if (existing) {
+      console.log("⚠ Transaction already processed");
+
+      return res.redirect(
+        "https://computerarchi.com/Dpay/dashboard?notchpay_status=success"
+      );
+    }
+
+    const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
       .eq("email", email)
       .single();
+
+    if (userError || !user) {
+      console.log("❌ User not found:", email);
+      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+    }
 
     const newTotalDeposited = (user.total_deposited || 0) + amount;
     const newWalletBalance = (user.wallet_balance || 0) + amount;
@@ -770,6 +800,8 @@ app.get("/api/payments/verify", async (req, res) => {
         reference: transaction.reference,
         at: new Date()
       });
+
+    console.log("✅ Payment verified and saved");
 
     return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=success");
 
