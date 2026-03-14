@@ -729,19 +729,19 @@ app.post('/api/payments/create', async (req, res) => {
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
 app.post("/api/payments/verify", async (req, res) => {
-
   try {
 
     const reference = req.body.trxref || req.body.reference;
 
     if (!reference) {
       return res.status(400).json({
-        message: "Missing reference"
+        message: "Missing payment reference"
       });
     }
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
+    // Verify payment with NotchPay
     const verifyResponse = await fetch(
       `https://api.notchpay.co/payments/${reference}`,
       {
@@ -756,53 +756,103 @@ app.post("/api/payments/verify", async (req, res) => {
     const verifyData = await verifyResponse.json();
 
     if (!verifyResponse.ok) {
+      console.error("NotchPay verification failed:", verifyData);
       return res.status(400).json({
-        message: "Verification failed"
+        message: "Payment verification failed"
       });
     }
 
     const transaction = verifyData.transaction;
 
-    if (transaction.status !== "complete") {
+    if (!transaction || transaction.status !== "complete") {
       return res.status(400).json({
         message: "Payment not completed"
       });
     }
 
-    // Extract plan id
+    const amount = transaction.amount;
+
+    // Extract plan id from reference
     const parts = transaction.reference.split("_");
     const planId = parts[1];
 
     const email = transaction.customer_email;
 
-    // Activate plan
+    if (!email) {
+      return res.status(400).json({
+        message: "Customer email missing"
+      });
+    }
+
+    // Check if transaction already exists (prevent duplicates)
+    const { data: existingTransaction } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("reference", transaction.reference)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingTransaction) {
+      console.log("Transaction already processed:", transaction.reference);
+      return res.json({ success: true, message: "Transaction already verified" });
+    }
+
+    // Get current user
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
+
+    if (userError || !user) {
+      return res.status(404).json({
+        message: "User not found"
+      });
+    }
+
+    const newTotalDeposited = (user.totalDeposited || 0) + amount;
+    const newWalletBalance = (user.walletBalance || 0) + amount;
+
+    // Update user account
     await supabase
       .from("users")
       .update({
         active_plan: planId,
+        walletBalance: newWalletBalance,
+        totalDeposited: newTotalDeposited,
         plan_activated_at: new Date()
       })
       .eq("email", email);
 
-    // Save transaction
-    await supabase.from("transactions").insert({
-      user_email: email,
-      plan_id: planId,
-      amount: transaction.amount,
-      reference: transaction.reference,
-      status: transaction.status
-    });
+    // Save transaction history
+    await supabase
+      .from("transactions")
+      .insert({
+        user_email: email,
+        type: "plan_purchase",
+        description: `Purchase of plan ${planId}`,
+        amount: amount,
+        status: "completed",
+        reference: transaction.reference,
+        at: new Date()
+      });
 
-    res.json({ success: true });
+    console.log("Payment verified and plan activated:", email, planId);
+
+    return res.json({
+      success: true,
+      message: "Payment verified and plan activated"
+    });
 
   } catch (err) {
 
-    res.status(500).json({
-      message: "Verification error"
+    console.error("Verification error:", err);
+
+    return res.status(500).json({
+      message: "Payment verification error"
     });
 
   }
-
 });
 
 app.get("/api/transactions", async (req, res) => {
