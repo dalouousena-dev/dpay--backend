@@ -828,7 +828,7 @@ app.get("/api/transactions", async (req, res) => {
 
 
 app.get("/api/payments/verify", (req, res) => {
-  res.redirect("https://dpay.vercel.app/dashboard?payment=success");
+  res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=success");
 });
 app.get("/api/user/profile", async (req, res) => {
 
