@@ -584,115 +584,62 @@ app.get('/api/referral/code', async (req, res) => {
 });
 
 // --- plan purchase endpoints ---
-app.post('/api/plans/purchase', async (req, res) => {
+app.post("/api/plans/purchase", async (req, res) => {
   try {
 
     const authHeader = req.headers.authorization || "";
+    const token = authHeader.replace("Bearer ", "");
 
-    if (!authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        message: "Authorization token missing or invalid"
-      });
-    }
-
-    const token = authHeader.replace("Bearer ", "").trim();
-
-    if (!token) {
-      return res.status(401).json({
-        message: "Invalid token"
-      });
-    }
-
-    // 🔹 Get user
-    const { data: user, error } = await supabase
+    const { data: user } = await supabase
       .from("users")
       .select("*")
       .eq("token", token)
       .single();
 
-    if (error || !user) {
-      return res.status(401).json({
-        message: "Invalid token or user not found"
-      });
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
     }
 
     const { planId, amount } = req.body;
 
-    if (!planId || !amount) {
-      return res.status(400).json({
-        message: "Plan ID and amount are required"
-      });
-    }
-
-    const numericAmount = Number(amount);
-
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      return res.status(400).json({
-        message: "Invalid amount"
-      });
-    }
-
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
-    if (!apiKey) {
-      return res.status(500).json({
-        message: "Payment gateway not configured"
-      });
-    }
-
-    const endpoint = "https://api.notchpay.co/payments";
-
-    const notchResponse = await fetch(endpoint, {
+    const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: apiKey
       },
       body: JSON.stringify({
-        amount: numericAmount,
+        amount: amount,
         currency: "XAF",
-        customer: {
-          email: user.email,
-          name: user.username || "Customer"
-        },
+        description: `Purchase of plan ${planId}`,
         reference: `plan_${planId}_${Date.now()}`,
         callback: "https://dpaybackend.onrender.com/api/payments/verify",
-        description: `Purchase of plan ${planId}`
+        customer: {
+          email: user.email,
+          name: user.username
+        }
       })
     });
 
-    const notchData = await notchResponse.json();
+    const data = await response.json();
 
-    console.log("NotchPay response:", notchData);
-
-    if (!notchResponse.ok) {
+    if (!data.authorization_url) {
       return res.status(500).json({
-        message: "Failed to create payment session",
-        notchError: notchData
+        message: "Payment URL not received"
       });
     }
 
-    const paymentUrl = notchData.authorization_url;
-
-    if (!paymentUrl) {
-      return res.status(500).json({
-        message: "Payment URL not received",
-        notchError: notchData
-      });
-    }
-
-    return res.json({
+    res.json({
       success: true,
-      paymentUrl
+      paymentUrl: data.authorization_url
     });
 
-  } catch (error) {
+  } catch (err) {
 
-    console.error("Purchase initialization error:", error);
-
-    return res.status(500).json({
-      message: "Server error while initializing purchase",
-      error: error.message
+    res.status(500).json({
+      message: "Payment initialization failed"
     });
 
   }
@@ -781,15 +728,19 @@ app.post("/api/payments/verify", async (req, res) => {
     const reference = req.body.trxref || req.body.reference;
 
     if (!reference) {
-      return res.status(400).json({ message: "Missing reference" });
+      return res.status(400).json({
+        message: "Missing reference"
+      });
     }
+
+    const apiKey = process.env.NOTCHPAY_API_KEY;
 
     const verifyResponse = await fetch(
       `https://api.notchpay.co/payments/${reference}`,
       {
         method: "GET",
         headers: {
-          Authorization: process.env.NOTCHPAY_API_KEY,
+          Authorization: apiKey,
           "Content-Type": "application/json"
         }
       }
@@ -798,34 +749,55 @@ app.post("/api/payments/verify", async (req, res) => {
     const verifyData = await verifyResponse.json();
 
     if (!verifyResponse.ok) {
-      return res.status(400).json({ message: "Verification failed" });
+      return res.status(400).json({
+        message: "Verification failed"
+      });
     }
 
     const transaction = verifyData.transaction;
 
-    if (!transaction || transaction.status !== "complete") {
+    if (transaction.status !== "complete") {
       return res.status(400).json({
         message: "Payment not completed"
       });
     }
 
-    console.log("PAYMENT VERIFIED:", transaction.reference);
+    // Extract plan id
+    const parts = transaction.reference.split("_");
+    const planId = parts[1];
 
-    // continue with activation
+    const email = transaction.customer_email;
+
+    // Activate plan
+    await supabase
+      .from("users")
+      .update({
+        active_plan: planId,
+        plan_activated_at: new Date()
+      })
+      .eq("email", email);
+
+    // Save transaction
+    await supabase.from("transactions").insert({
+      user_email: email,
+      plan_id: planId,
+      amount: transaction.amount,
+      reference: transaction.reference,
+      status: transaction.status
+    });
 
     res.json({ success: true });
 
   } catch (err) {
 
-    console.error("Verification error:", err);
-
     res.status(500).json({
-      message: "Verification failed"
+      message: "Verification error"
     });
 
   }
 
 });
+
 app.get("/api/transactions", async (req, res) => {
   try {
 
@@ -858,7 +830,19 @@ app.get("/api/transactions", async (req, res) => {
 app.get("/api/payments/verify", (req, res) => {
   res.redirect("https://dpay.vercel.app/dashboard?payment=success");
 });
+app.get("/api/user/profile", async (req, res) => {
 
+  const token = req.headers.authorization.replace("Bearer ", "");
+
+  const { data: user } = await supabase
+    .from("users")
+    .select("*")
+    .eq("token", token)
+    .single();
+
+  res.json(user);
+
+});
 
 // NotchPay Webhook - Handle payment success/failure events
 app.post('/api/webhooks/notchpay', async (req, res) => {
