@@ -731,6 +731,8 @@ app.post('/api/payments/create', async (req, res) => {
 app.post("/api/payments/verify", async (req, res) => {
   try {
 
+    console.log("NotchPay callback received:", req.body);
+
     const reference = req.body.trxref || req.body.reference;
 
     if (!reference) {
@@ -741,17 +743,25 @@ app.post("/api/payments/verify", async (req, res) => {
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
-    // Verify payment with NotchPay
-    const verifyResponse = await fetch(
-      `https://sandboxe.notchpay.co/payments/${reference}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: apiKey,
-          "Content-Type": "application/json"
-        }
+    if (!apiKey) {
+      return res.status(500).json({
+        message: "NotchPay API key missing"
+      });
+    }
+
+    // choose correct endpoint
+    const endpoint = apiKey.startsWith("sk_test")
+      ? `https://sandbox.notchpay.co/payments/${reference}`
+      : `https://api.notchpay.co/payments/${reference}`;
+
+    // verify payment with NotchPay
+    const verifyResponse = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json"
       }
-    );
+    });
 
     const verifyData = await verifyResponse.json();
 
@@ -770,13 +780,16 @@ app.post("/api/payments/verify", async (req, res) => {
       });
     }
 
-    const amount = transaction.amount;
+    const amount = Number(transaction.amount);
 
-    // Extract plan id from reference
+    // extract plan id from reference
     const parts = transaction.reference.split("_");
     const planId = parts[1];
 
-    const email = transaction.customer_email;
+    const email =
+      transaction.customer_email ||
+      transaction.customer?.email ||
+      null;
 
     if (!email) {
       return res.status(400).json({
@@ -784,20 +797,22 @@ app.post("/api/payments/verify", async (req, res) => {
       });
     }
 
-    // Check if transaction already exists (prevent duplicates)
+    // check duplicate transaction
     const { data: existingTransaction } = await supabase
       .from("transactions")
       .select("*")
       .eq("reference", transaction.reference)
-      .limit(1)
       .maybeSingle();
 
     if (existingTransaction) {
       console.log("Transaction already processed:", transaction.reference);
-      return res.json({ success: true, message: "Transaction already verified" });
+      return res.json({
+        success: true,
+        message: "Transaction already verified"
+      });
     }
 
-    // Get current user
+    // get user
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
@@ -805,6 +820,7 @@ app.post("/api/payments/verify", async (req, res) => {
       .single();
 
     if (userError || !user) {
+      console.error("User not found:", email);
       return res.status(404).json({
         message: "User not found"
       });
@@ -813,8 +829,8 @@ app.post("/api/payments/verify", async (req, res) => {
     const newTotalDeposited = (user.totalDeposited || 0) + amount;
     const newWalletBalance = (user.walletBalance || 0) + amount;
 
-    // Update user account
-    await supabase
+    // update user
+    const { error: updateError } = await supabase
       .from("users")
       .update({
         active_plan: planId,
@@ -824,8 +840,15 @@ app.post("/api/payments/verify", async (req, res) => {
       })
       .eq("email", email);
 
-    // Save transaction history
-    await supabase
+    if (updateError) {
+      console.error("User update error:", updateError);
+      return res.status(500).json({
+        message: "Failed to update user"
+      });
+    }
+
+    // save transaction
+    const { error: insertError } = await supabase
       .from("transactions")
       .insert({
         user_email: email,
@@ -836,6 +859,10 @@ app.post("/api/payments/verify", async (req, res) => {
         reference: transaction.reference,
         at: new Date()
       });
+
+    if (insertError) {
+      console.error("Transaction insert error:", insertError);
+    }
 
     console.log("Payment verified and plan activated:", email, planId);
 
