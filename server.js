@@ -986,8 +986,8 @@ app.get("/api/payments/check/:reference", async (req, res) => {
         .from("users")
         .update({
           active_plan: planId,
-          wallet_balance: newWalletBalance,
-          total_deposited: newTotalDeposited,
+         wallet_balance: newWalletBalance,
+         total_deposited: newTotalDeposited,
           withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
         })
         .eq("email", email);
