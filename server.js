@@ -893,8 +893,6 @@ app.get("/api/payments/verify", async (req, res) => {
   }
 });
 
-
-app.get("/api/payments/check/:reference", async (req, res) => {
 app.get("/api/payments/check/:reference", async (req, res) => {
   try {
 
