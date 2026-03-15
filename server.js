@@ -605,7 +605,6 @@ app.get('/api/referral/code', async (req, res) => {
 app.post("/api/plans/purchase", async (req, res) => {
   try {
 
-    // Get authorization header safely
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -614,7 +613,7 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     const token = authHeader.split(" ")[1];
 
-    // Get user from Supabase
+    // Get user
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
@@ -631,7 +630,6 @@ app.post("/api/plans/purchase", async (req, res) => {
       return res.status(400).json({ message: "planId and amount are required" });
     }
 
-    // Generate payment reference
     const reference = `plan_${planId}_${Date.now()}`;
 
     console.log("Creating payment:", {
@@ -665,8 +663,8 @@ app.post("/api/plans/purchase", async (req, res) => {
         },
 
         metadata: {
-          planId: planId,
-          email: user.email
+          planId,
+          userId: user.id
         }
       })
     });
@@ -675,18 +673,29 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     console.log("NotchPay response:", data);
 
-    if (!data || !data.authorization_url) {
+    const paymentUrl = data?.data?.checkout_url;
+
+    if (!paymentUrl) {
       return res.status(500).json({
         message: "Payment URL not received",
         notchpay_response: data
       });
     }
 
-    // Return payment URL
+    // ✅ Save payment in database
+    await supabase.from("payments").insert({
+      user_id: user.id,
+      email: user.email,
+      plan_id: planId,
+      amount: amount,
+      reference: reference,
+      status: "pending"
+    });
+
+    // Send payment link to frontend
     res.json({
-      success: true,
-      paymentUrl: data.authorization_url,
-      reference: reference
+      payment_url: paymentUrl,
+      reference
     });
 
   } catch (err) {
@@ -709,7 +718,6 @@ app.post("/api/payments/create", async (req, res) => {
 
     const { amount, email } = req.body;
 
-    // Validate request body
     if (!amount || !email) {
       return res.status(400).json({
         message: "Amount and email are required"
@@ -721,19 +729,16 @@ app.post("/api/payments/create", async (req, res) => {
     const response = await fetch("https://apisandbox.notchpay.co/payments", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+        Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
         amount: Number(amount),
         currency: "XAF",
-
         reference: reference,
-
         customer: {
           email: email
         },
-
         callback_url: "https://dpaybackend.onrender.com/api/payments/verify"
       })
     });
@@ -749,9 +754,21 @@ app.post("/api/payments/create", async (req, res) => {
       });
     }
 
+    // ✅ extract payment link
+    const paymentUrl = data?.data?.checkout_url;
+
+    if (!paymentUrl) {
+      return res.status(500).json({
+        message: "Payment URL not received from NotchPay",
+        notchpay: data
+      });
+    }
+
+    // ✅ send clean response to frontend
     return res.json({
       success: true,
-      payment: data
+      payment_url: paymentUrl,
+      reference: reference
     });
 
   } catch (error) {
@@ -777,13 +794,20 @@ app.get("/api/payments/verify", async (req, res) => {
       req.query.transaction_id;
 
     if (!reference) {
-      return res.status(400).send("Missing reference");
+      console.log("❌ Missing reference");
+      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
+    if (!apiKey) {
+      console.log("❌ Missing NOTCHPAY_API_KEY");
+      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+    }
+
+    // Choose correct endpoint
     const endpoint = apiKey.startsWith("sk_test")
-      ? `https://sandbox.notchpay.co/payments/${reference}`
+      ? `https://apisandbox.notchpay.co/payments/${reference}`
       : `https://api.notchpay.co/payments/${reference}`;
 
     const verifyResponse = await fetch(endpoint, {
@@ -799,18 +823,31 @@ app.get("/api/payments/verify", async (req, res) => {
     console.log("NOTCHPAY RESPONSE:", verifyData);
 
     if (!verifyResponse.ok) {
+      console.log("❌ Verification request failed");
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-    const transaction = verifyData.transaction || verifyData;
+    // Extract transaction safely
+    const transaction =
+      verifyData?.data ||
+      verifyData?.transaction ||
+      verifyData;
 
-    if (!["complete","completed","success"].includes(transaction.status)) {
-      console.log("⏳ Transaction not complete:", transaction.status);
+    if (!transaction) {
+      console.log("❌ Invalid transaction response");
+      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+    }
+
+    const status = (transaction.status || "").toLowerCase();
+
+    if (!["complete", "completed", "success"].includes(status)) {
+      console.log("⏳ Transaction not complete:", status);
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
     }
 
-    const amount = Number(transaction.amount);
+    const amount = Number(transaction.amount || 0);
 
+    // Extract planId
     let planId = transaction.metadata?.planId;
 
     if (!planId && transaction.reference) {
@@ -818,9 +855,15 @@ app.get("/api/payments/verify", async (req, res) => {
       planId = parts[1];
     }
 
+    if (!planId) {
+      console.log("❌ Plan ID not found");
+      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+    }
+
+    // Extract email
     const email =
-      transaction.customer_email ||
       transaction.customer?.email ||
+      transaction.customer_email ||
       verifyData.customer?.email ||
       null;
 
@@ -832,8 +875,8 @@ app.get("/api/payments/verify", async (req, res) => {
     // Prevent duplicate transaction
     const { data: existing } = await supabase
       .from("transactions")
-      .select("*")
-      .eq("reference", transaction.reference)
+      .select("reference")
+      .eq("reference", reference)
       .maybeSingle();
 
     if (existing) {
@@ -844,6 +887,7 @@ app.get("/api/payments/verify", async (req, res) => {
       );
     }
 
+    // Find user
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
@@ -852,22 +896,30 @@ app.get("/api/payments/verify", async (req, res) => {
 
     if (userError || !user) {
       console.log("❌ User not found:", email);
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+      return res.redirect(
+        "https://computerarchi.com/Dpay/dashboard?notchpay_status=error"
+      );
     }
 
+    // Calculate new values
     const newTotalDeposited = (user.total_deposited || 0) + amount;
-    const newWalletBalance = (user.wallet_balance || 0) + amount;
 
+    // ⚠ usually wallet should NOT increase for plan purchase
+    const newWalletBalance = user.wallet_balance || 0;
+
+    // Update user
     await supabase
       .from("users")
       .update({
         active_plan: planId,
-        wallet_balance: newWalletBalance,
         total_deposited: newTotalDeposited,
+        wallet_balance: newWalletBalance,
+        last_transaction_date: new Date(),
         withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       })
       .eq("email", email);
 
+    // Save transaction
     await supabase
       .from("transactions")
       .insert({
@@ -876,19 +928,23 @@ app.get("/api/payments/verify", async (req, res) => {
         description: `Purchase of plan ${planId}`,
         amount: amount,
         status: "completed",
-        reference: transaction.reference,
+        reference: reference,
         at: new Date()
       });
 
     console.log("✅ Payment verified and saved");
 
-    return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=success");
+    return res.redirect(
+      `https://computerarchi.com/Dpay/dashboard?notchpay_status=success&reference=${reference}`
+    );
 
   } catch (err) {
 
     console.error("Verification error:", err);
 
-    return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+    return res.redirect(
+      "https://computerarchi.com/Dpay/dashboard?notchpay_status=error"
+    );
 
   }
 });
@@ -1214,33 +1270,55 @@ app.get("/api/transactions", async (req, res) => {
 
 
 app.get("/api/users/profile", async (req, res) => {
+  try {
 
-  const { data: user } = await supabase
-    .from("users")
-    .select("*")
-    .eq("token", token)
-    .single();
+    // Get token from Authorization header
+    const authHeader = req.headers.authorization;
 
-  if (!user) {
-    return res.status(404).json({ message: "User not found" });
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Missing authorization token" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    // Fetch user
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("token", token)
+      .single();
+
+    if (error || !user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Return fields using database names
+    res.json({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+
+      active_plan: user.active_plan,
+      wallet_balance: user.wallet_balance,
+      total_deposited: user.total_deposited,
+      total_profits: user.total_profits,
+
+      withdrawal_available_at: user.withdrawal_available_at,
+      last_transaction_date: user.last_transaction_date,
+      last_product_purchase: user.last_product_purchase,
+
+      created_at: user.created_at,
+      referral_code: user.referral_code,
+      is_active: user.is_active
+    });
+
+  } catch (err) {
+
+    console.error("Profile error:", err);
+
+    res.status(500).json({ message: "Failed to load profile" });
+
   }
-
-  res.json({
-    id: user.id,
-    username: user.username,
-    email: user.email,
-
-    activePlan: user.active_plan,
-    walletBalance: user.wallet_balance,
-    totalDeposited: user.total_deposited,
-
-    withdrawalAvailableAt: user.withdrawal_available_at,
-    createdAt: user.created_at,
-
-    referralCode: user.referral_code,
-    isActive: user.is_active
-  });
-
 });
 
 
