@@ -605,49 +605,59 @@ app.get('/api/referral/code', async (req, res) => {
 app.post("/api/plans/purchase", async (req, res) => {
   try {
 
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.replace("Bearer ", "");
+    // Get authorization header safely
+    const authHeader = req.headers.authorization;
 
-    const { data: user } = await supabase
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Missing or invalid authorization token" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    // Get user from Supabase
+    const { data: user, error } = await supabase
       .from("users")
       .select("*")
       .eq("token", token)
       .single();
 
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
+    if (error || !user) {
+      return res.status(401).json({ message: "User not found or invalid token" });
     }
 
     const { planId, amount } = req.body;
 
-    // 🔑 Generate reference on your server
+    if (!planId || !amount) {
+      return res.status(400).json({ message: "planId and amount are required" });
+    }
+
+    // Generate payment reference
     const reference = `plan_${planId}_${Date.now()}`;
 
     console.log("Creating payment:", {
-      user: user.email,
+      email: user.email,
       planId,
       amount,
       reference
     });
 
+    // Create payment with NotchPay
     const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: process.env.NOTCHPAY_API_KEY
+        "Authorization": `Bearer ${process.env.NOTCHPAY_API_KEY}`
       },
       body: JSON.stringify({
-        amount: amount,
+        amount: Number(amount),
         currency: "XAF",
-
         reference: reference,
-
         description: `Purchase of plan ${planId}`,
 
         callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
 
-       success_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=success",
-cancel_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=error",
+        success_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=success",
+        cancel_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=error",
 
         customer: {
           email: user.email,
@@ -665,14 +675,14 @@ cancel_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=error",
 
     console.log("NotchPay response:", data);
 
-    if (!data.authorization_url) {
+    if (!data || !data.authorization_url) {
       return res.status(500).json({
         message: "Payment URL not received",
-        notchpay: data
+        notchpay_response: data
       });
     }
 
-    // 🚀 Return reference so frontend can track payment
+    // Return payment URL
     res.json({
       success: true,
       paymentUrl: data.authorization_url,
@@ -684,44 +694,73 @@ cancel_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=error",
     console.error("Payment initialization failed:", err);
 
     res.status(500).json({
-      message: "Payment initialization failed"
+      message: "Payment initialization failed",
+      error: err.message
     });
 
   }
 });
 
+
     // Create NotchPay payment
     
-  app.post('/api/payments/create', async (req, res) => {
+app.post("/api/payments/create", async (req, res) => {
   try {
 
     const { amount, email } = req.body;
 
+    // Validate request body
+    if (!amount || !email) {
+      return res.status(400).json({
+        message: "Amount and email are required"
+      });
+    }
+
+    const reference = `payment_${Date.now()}`;
+
     const response = await fetch("https://apisandbox.notchpay.co/payments", {
       method: "POST",
-     headers: {
-  Authorization: process.env.NOTCHPAY_API_KEY,
-  "Content-Type": "application/json"
-},
+      headers: {
+        "Authorization": `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
-        amount,
+        amount: Number(amount),
         currency: "XAF",
-        customer: { email },
-        reference: `payment_${Date.now()}`,
+
+        reference: reference,
+
+        customer: {
+          email: email
+        },
+
         callback_url: "https://dpaybackend.onrender.com/api/payments/verify"
       })
     });
 
     const data = await response.json();
+
     console.log("NOTCHPAY CREATE PAYMENT RESPONSE:", data);
-    return res.json(data);
+
+    if (!response.ok) {
+      return res.status(400).json({
+        message: "NotchPay error",
+        notchpay: data
+      });
+    }
+
+    return res.json({
+      success: true,
+      payment: data
+    });
 
   } catch (error) {
 
     console.error("❌ Payment creation error:", error);
 
     res.status(500).json({
-      message: "Failed to create payment"
+      message: "Failed to create payment",
+      error: error.message
     });
 
   }
