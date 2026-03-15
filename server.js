@@ -1190,54 +1190,36 @@ app.get("/api/transactions", async (req, res) => {
 });
 
 
-app.get("/api/user/profile", async (req, res) => {
+app.get("/api/users/profile", async (req, res) => {
 
-  try {
+  const { data: user } = await supabase
+    .from("users")
+    .select("*")
+    .eq("token", token)
+    .single();
 
-    const auth = req.headers.authorization;
-
-    if (!auth) {
-      return res.status(401).json({
-        message: "Missing authorization token"
-      });
-    }
-
-    const token = auth.replace("Bearer ", "");
-
-    const { data: user, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("token", token)
-      .single();
-
-    if (error || !user) {
-      return res.status(401).json({
-        message: "Invalid token"
-      });
-    }
-
-    // convert snake_case → camelCase for dashboard
-    const formattedUser = {
-      ...user,
-      walletBalance: user.wallet_balance,
-      totalDeposited: user.total_deposited,
-      activePlan: user.active_plan,
-      createdAt: user.created_at
-    };
-
-    res.json(formattedUser);
-
-  } catch (err) {
-
-    console.error("Profile error:", err);
-
-    res.status(500).json({
-      message: "Server error"
-    });
-
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
   }
 
+  res.json({
+    id: user.id,
+    username: user.username,
+    email: user.email,
+
+    activePlan: user.active_plan,
+    walletBalance: user.wallet_balance,
+    totalDeposited: user.total_deposited,
+
+    withdrawalAvailableAt: user.withdrawal_available_at,
+    createdAt: user.created_at,
+
+    referralCode: user.referral_code,
+    isActive: user.is_active
+  });
+
 });
+
 
 // NotchPay Webhook - Handle payment success/failure events
 app.post('/api/webhooks/notchpay', async (req, res) => {
