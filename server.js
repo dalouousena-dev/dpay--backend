@@ -895,19 +895,25 @@ app.get("/api/payments/verify", async (req, res) => {
 
 
 app.get("/api/payments/check/:reference", async (req, res) => {
-
+app.get("/api/payments/check/:reference", async (req, res) => {
   try {
 
-    const reference = req.params.reference;
+    const { reference } = req.params;
 
-    const endpoint = process.env.NOTCHPAY_API_KEY.startsWith("sk_test")
-      ? `https://sandbox.notchpay.co/payments/${reference}`
+    if (!reference) {
+      return res.status(400).json({ message: "Missing reference" });
+    }
+
+    const apiKey = process.env.NOTCHPAY_API_KEY;
+
+    const endpoint = apiKey.startsWith("sk_test")
+      ? `https://apisandbox.notchpay.co/payments/${reference}`
       : `https://api.notchpay.co/payments/${reference}`;
 
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
       headers: {
-        Authorization: process.env.NOTCHPAY_API_KEY,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       }
     });
@@ -915,7 +921,11 @@ app.get("/api/payments/check/:reference", async (req, res) => {
     const verifyData = await verifyResponse.json();
 
     if (!verifyResponse.ok) {
-      return res.status(400).json({ message: "Verification failed" });
+      console.error("NotchPay verification failed:", verifyData);
+      return res.status(400).json({
+        message: "Verification failed",
+        notchpay: verifyData
+      });
     }
 
     const transaction = verifyData.transaction || verifyData;
@@ -924,11 +934,12 @@ app.get("/api/payments/check/:reference", async (req, res) => {
       return res.status(400).json({ message: "Transaction missing" });
     }
 
-    if (!["complete","completed","success"].includes(transaction.status)) {
+    // If payment not finished yet
+    if (!["complete", "completed", "success"].includes(transaction.status)) {
       return res.json({ status: transaction.status });
     }
 
-    const amount = Number(transaction.amount);
+    const amount = Number(transaction.amount) || 0;
 
     const email =
       transaction.customer_email ||
@@ -939,10 +950,19 @@ app.get("/api/payments/check/:reference", async (req, res) => {
       return res.status(400).json({ message: "Customer email missing" });
     }
 
-    const parts = transaction.reference.split("_");
-    const planId = parts[1];
+    // Extract planId from reference
+    let planId = null;
 
-    // prevent duplicate activation
+    if (transaction.reference) {
+      const parts = transaction.reference.split("_");
+      planId = parts.length >= 2 ? parts[1] : null;
+    }
+
+    if (!planId) {
+      return res.status(400).json({ message: "Plan ID missing in reference" });
+    }
+
+    // Prevent duplicate transaction processing
     const { data: existing } = await supabase
       .from("transactions")
       .select("*")
@@ -951,58 +971,63 @@ app.get("/api/payments/check/:reference", async (req, res) => {
 
     if (!existing) {
 
-      const { data: user } = await supabase
+      const { data: user, error: userError } = await supabase
         .from("users")
         .select("*")
         .eq("email", email)
         .single();
 
-      if (user) {
-
-        const newTotalDeposited = (user.total_deposited || 0) + amount;
-        const newWalletBalance = (user.wallet_balance || 0) + amount;
-
-        await supabase
-          .from("users")
-          .update({
-            active_plan: planId,
-            wallet_balance: newWalletBalance,
-            total_deposited: newTotalDeposited
-          })
-          .eq("email", email);
-
-        await supabase
-          .from("transactions")
-          .insert({
-            user_email: email,
-            type: "plan_purchase",
-            description: `Purchase of plan ${planId}`,
-            amount: amount,
-            status: "completed",
-            reference: transaction.reference,
-            at: new Date()
-          });
-
-        console.log("Plan activated via polling:", email);
+      if (userError || !user) {
+        return res.status(404).json({ message: "User not found" });
       }
+
+      const newTotalDeposited = (user.total_deposited || 0) + amount;
+      const newWalletBalance = (user.wallet_balance || 0) + amount;
+
+      await supabase
+        .from("users")
+        .update({
+          active_plan: planId,
+          wallet_balance: newWalletBalance,
+          total_deposited: newTotalDeposited,
+          withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        })
+        .eq("email", email);
+
+      await supabase
+        .from("transactions")
+        .insert({
+          user_email: email,
+          type: "plan_purchase",
+          description: `Purchase of plan ${planId}`,
+          amount: amount,
+          status: "completed",
+          reference: transaction.reference,
+          at: new Date()
+        });
+
+      console.log("✅ Plan activated via polling:", email, planId);
 
     }
 
-    res.json({
-      status: "complete"
+    return res.json({
+      status: "complete",
+      reference: transaction.reference
     });
 
   } catch (err) {
 
     console.error("Payment polling error:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Verification error"
     });
 
   }
-
 });
+
+
+
 
 
   /* =========================
