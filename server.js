@@ -675,12 +675,19 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     const paymentUrl = data?.data?.checkout_url;
 
-    if (!paymentUrl) {
-      return res.status(500).json({
-        message: "Payment URL not received",
-        notchpay_response: data
-      });
-    }
+const paymentUrl =
+  data?.authorization_url ||
+  data?.checkout_url ||
+  data?.data?.authorization_url ||
+  data?.data?.checkout_url;
+
+if (!paymentUrl) {
+  console.error("Payment URL not received:", data);
+  return res.status(500).json({
+    message: "Payment URL not received",
+    notchpay_response: data
+  });
+}
 
     // ✅ Save payment in database
     await supabase.from("payments").insert({
