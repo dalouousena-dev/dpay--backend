@@ -729,7 +729,7 @@ app.post("/api/payments/create", async (req, res) => {
     const response = await fetch("https://apisandbox.notchpay.co/payments", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+       Authorization: process.env.NOTCHPAY_API_KEY,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -813,7 +813,7 @@ app.get("/api/payments/verify", async (req, res) => {
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
       headers: {
-       Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+       Authorization: process.env.NOTCHPAY_API_KEY,
         "Content-Type": "application/json"
       }
     });
@@ -967,7 +967,7 @@ app.get("/api/payments/check/:reference", async (req, res) => {
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
       headers: {
-       Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+       Authorization: process.env.NOTCHPAY_API_KEY,
         "Content-Type": "application/json"
       }
     });
@@ -1119,7 +1119,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
       headers: {
-       Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+       Authorization: process.env.NOTCHPAY_API_KEY,
         "Content-Type": "application/json"
       }
     });
