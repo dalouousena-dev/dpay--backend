@@ -865,29 +865,114 @@ if (!planId && transaction.reference) {
 
 app.get("/api/payments/check/:reference", async (req, res) => {
 
-  const reference = req.params.reference;
+  try {
 
-  const endpoint = `https://sandbox.notchpay.co/payments/${reference}`;
+    const reference = req.params.reference;
 
-  const response = await fetch(endpoint, {
-    headers: {
-      Authorization: process.env.NOTCHPAY_API_KEY
+    const endpoint = process.env.NOTCHPAY_API_KEY.startsWith("sk_test")
+      ? `https://sandbox.notchpay.co/payments/${reference}`
+      : `https://api.notchpay.co/payments/${reference}`;
+
+    const verifyResponse = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        Authorization: process.env.NOTCHPAY_API_KEY,
+        "Content-Type": "application/json"
+      }
+    });
+
+    const verifyData = await verifyResponse.json();
+
+    if (!verifyResponse.ok) {
+      return res.status(400).json({ message: "Verification failed" });
     }
-  });
 
-  const data = await response.json();
+    const transaction = verifyData.transaction || verifyData;
 
-  if (!response.ok) {
-    return res.status(400).json({ message: "Verification failed" });
+    if (!transaction) {
+      return res.status(400).json({ message: "Transaction missing" });
+    }
+
+    if (!["complete","completed","success"].includes(transaction.status)) {
+      return res.json({ status: transaction.status });
+    }
+
+    const amount = Number(transaction.amount);
+
+    const email =
+      transaction.customer_email ||
+      transaction.customer?.email ||
+      null;
+
+    if (!email) {
+      return res.status(400).json({ message: "Customer email missing" });
+    }
+
+    const parts = transaction.reference.split("_");
+    const planId = parts[1];
+
+    // prevent duplicate activation
+    const { data: existing } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("reference", transaction.reference)
+      .maybeSingle();
+
+    if (!existing) {
+
+      const { data: user } = await supabase
+        .from("users")
+        .select("*")
+        .eq("email", email)
+        .single();
+
+      if (user) {
+
+        const newTotalDeposited = (user.total_deposited || 0) + amount;
+        const newWalletBalance = (user.wallet_balance || 0) + amount;
+
+        await supabase
+          .from("users")
+          .update({
+            active_plan: planId,
+            wallet_balance: newWalletBalance,
+            total_deposited: newTotalDeposited
+          })
+          .eq("email", email);
+
+        await supabase
+          .from("transactions")
+          .insert({
+            user_email: email,
+            type: "plan_purchase",
+            description: `Purchase of plan ${planId}`,
+            amount: amount,
+            status: "completed",
+            reference: transaction.reference,
+            at: new Date()
+          });
+
+        console.log("Plan activated via polling:", email);
+      }
+
+    }
+
+    res.json({
+      status: "complete"
+    });
+
+  } catch (err) {
+
+    console.error("Payment polling error:", err);
+
+    res.status(500).json({
+      message: "Verification error"
+    });
+
   }
 
-  const transaction = data.transaction || data;
-
-  res.json({
-    status: transaction.status
-  });
-
 });
+
 
   /* =========================
      MOBILE MONEY / DIRECT
