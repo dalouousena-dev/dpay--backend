@@ -1111,14 +1111,15 @@ app.post("/api/payments/verify-webhook", async (req, res) => {
       });
     }
 
+    // Correct endpoints
     const endpoint = apiKey.startsWith("sk_test")
-      ? `https://sandbox.notchpay.co/payments/${reference}`
+      ? `https://apisandbox.notchpay.co/payments/${reference}`
       : `https://api.notchpay.co/payments/${reference}`;
 
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
       headers: {
-        Authorization: apiKey,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       }
     });
@@ -1134,7 +1135,11 @@ app.post("/api/payments/verify-webhook", async (req, res) => {
       });
     }
 
-    const transaction = verifyData.transaction;
+    // Safely extract transaction
+    const transaction =
+      verifyData?.data ||
+      verifyData?.transaction ||
+      verifyData;
 
     if (!transaction || !["complete","completed","success"].includes(transaction.status)) {
       return res.status(400).json({
@@ -1145,7 +1150,7 @@ app.post("/api/payments/verify-webhook", async (req, res) => {
     const amount = Number(transaction.amount);
 
     const parts = transaction.reference ? transaction.reference.split("_") : [];
-    const planId = parts[1] || null;
+    const planId = parts[1] || transaction.metadata?.planId || null;
 
     const email =
       transaction.customer_email ||
@@ -1158,6 +1163,7 @@ app.post("/api/payments/verify-webhook", async (req, res) => {
       });
     }
 
+    // Prevent duplicate transactions
     const { data: existingTransaction } = await supabase
       .from("transactions")
       .select("*")
@@ -1186,7 +1192,9 @@ app.post("/api/payments/verify-webhook", async (req, res) => {
     }
 
     const newTotalDeposited = (user.total_deposited || 0) + amount;
-    const newWalletBalance = (user.wallet_balance || 0) + amount;
+
+    // Usually plan purchase should NOT credit wallet
+    const newWalletBalance = user.wallet_balance || 0;
 
     const { error: updateError } = await supabase
       .from("users")
@@ -1194,6 +1202,7 @@ app.post("/api/payments/verify-webhook", async (req, res) => {
         active_plan: planId,
         wallet_balance: newWalletBalance,
         total_deposited: newTotalDeposited,
+        last_transaction_date: new Date(),
         withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       })
       .eq("email", email);
