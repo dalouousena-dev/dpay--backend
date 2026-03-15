@@ -1090,7 +1090,7 @@ app.get("/api/payments/check/:reference", async (req, res) => {
 
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
-app.post("/api/payments/verify-webhook", async (req, res) => {
+app.post("/api/notchpay/webhook", async (req, res) => {
   try {
 
     console.log("🔔 NotchPay callback received:", req.body);
