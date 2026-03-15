@@ -675,7 +675,6 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     const paymentUrl = data?.data?.checkout_url;
 
-const paymentUrl =
   data?.authorization_url ||
   data?.checkout_url ||
   data?.data?.authorization_url ||
