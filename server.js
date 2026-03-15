@@ -646,9 +646,8 @@ app.post("/api/plans/purchase", async (req, res) => {
 
         callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
 
-        success_redirect_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=success",
-
-        cancel_redirect_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=error",
+       success_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=success",
+cancel_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=error",
 
         customer: {
           email: user.email,
@@ -740,10 +739,15 @@ app.get("/api/payments/verify", async (req, res) => {
       req.query.transaction_id;
 
     if (!reference) {
-      console.log("❌ Missing reference");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+      return res.status(400).send("Missing reference");
     }
+ res.status(200).send("OK");
 
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Verification error");
+  }
+});
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
     const endpoint = apiKey.startsWith("sk_test")
