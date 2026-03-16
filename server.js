@@ -559,8 +559,6 @@ app.post("/api/plans/purchase", async (req, res) => {
 
   const { planId, amount } = req.body;
 
-const amount = PLAN_PRICES[planId];
-
     let email = req.body.email;
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
