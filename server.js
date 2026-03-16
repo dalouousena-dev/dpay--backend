@@ -554,53 +554,6 @@ app.get('/api/referral/stats', async (req, res) => {
   }
 });
 
-app.get('/api/referral/code', async (req, res) => {
-
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-
-  if (!token) {
-    return res.status(401).json({ message: 'Missing token' });
-  }
-
-  try {
-    let user = findUserByToken(token);
-
-    if (!user && supabase) {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('token', token)
-        .single();
-
-      if (!error && data) user = data;
-    }
-
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid token' });
-    }
-
-    const referralCode = user.referral_code || user.referralCode;
-
-    if (!referralCode) {
-      return res.status(400).json({ message: 'Referral code missing' });
-    }
-
-    const referralLink =
-      `${process.env.FRONTEND_URL || 'https://computerarchi.com/Dpay'}/#/register?ref=${referralCode}`;
-
-    res.json({
-      referralCode,
-      referralLink
-    });
-
-  } catch (err) {
-    console.error('Referral code error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-
 app.post("/api/plans/purchase", async (req, res) => {
   try {
 
@@ -608,7 +561,18 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
-    // get email from authenticated user
+    if (!apiKey) {
+      console.log("❌ Missing NOTCHPAY_API_KEY");
+      return res.status(500).json({
+        message: "Server configuration error"
+      });
+    }
+
+    if (!planId || !amount) {
+      return res.status(400).json({
+        message: "Plan ID and amount are required"
+      });
+    }
 
     if (!email) {
       return res.status(400).json({
@@ -622,14 +586,17 @@ app.post("/api/plans/purchase", async (req, res) => {
       amount: Number(amount),
       currency: "XAF",
       description: `Purchase of plan ${planId}`,
-      reference: merchantReference,
-      callback: "https://computerarchi.com/api/payments/verify",
 
-      // 🔴 THIS WAS MISSING
+      // Your reference
+      reference: merchantReference,
+
+      // Required by NotchPay
       email: email,
 
+      callback: "https://computerarchi.com/api/payments/verify",
+
       metadata: {
-        planId
+        planId: planId
       }
     };
 
@@ -642,46 +609,61 @@ app.post("/api/plans/purchase", async (req, res) => {
       body: JSON.stringify(payload)
     });
 
-const data = await response.json();
+    const data = await response.json();
 
-console.log("NOTCHPAY INIT RESPONSE:", JSON.stringify(data, null, 2));
+    console.log("NOTCHPAY INIT RESPONSE:", JSON.stringify(data, null, 2));
 
-if (!response.ok) {
-  return res.status(500).json({
-    message: "NotchPay initialization failed",
-    notchpay_response: data
-  });
-}
+    if (!response.ok) {
+      return res.status(500).json({
+        message: "NotchPay initialization failed",
+        notchpay_response: data
+      });
+    }
 
-// Extract checkout URL
-const paymentUrl =
-  data?.data?.checkout_url ||
-  data?.checkout_url ||
-  data?.data?.authorization_url ||
-  data?.authorization_url;
+    // 🔑 Extract payment URL safely
+    const paymentUrl =
+      data?.data?.checkout_url ||
+      data?.data?.payment_url ||
+      data?.checkout_url ||
+      data?.payment_url ||
+      data?.data?.authorization_url ||
+      data?.authorization_url;
 
-// Extract the real NotchPay reference
-const reference =
-  data?.data?.reference ||
-  data?.reference;
+    // 🔑 Extract the real NotchPay reference
+    const reference =
+      data?.data?.reference ||
+      data?.reference;
 
-if (!paymentUrl || !reference) {
-  return res.status(500).json({
-    message: "Invalid NotchPay response",
-    notchpay_response: data
-  });
-}
+    if (!paymentUrl) {
+      console.log("❌ Checkout URL missing in response");
 
-res.json({
-  paymentUrl,
-  reference
-});
+      return res.status(500).json({
+        message: "Payment URL not received from NotchPay",
+        notchpay_response: data
+      });
+    }
+
+    if (!reference) {
+      console.log("❌ Reference missing in response");
+
+      return res.status(500).json({
+        message: "Payment reference not received from NotchPay",
+        notchpay_response: data
+      });
+    }
+
+    // Send clean response to frontend
+    return res.json({
+      success: true,
+      paymentUrl: paymentUrl,
+      reference: reference
+    });
 
   } catch (err) {
 
     console.error("Plan purchase error:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Payment initialization failed"
     });
 
