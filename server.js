@@ -557,7 +557,9 @@ app.get('/api/referral/stats', async (req, res) => {
 app.post("/api/plans/purchase", async (req, res) => {
   try {
 
-    const { planId, amount, email } = req.body;
+    const { planId, amount } = req.body;
+
+    let email = req.body.email;
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
@@ -574,6 +576,21 @@ app.post("/api/plans/purchase", async (req, res) => {
       });
     }
 
+    // Try extracting email from JWT token if missing
+    if (!email) {
+      const authHeader = req.headers.authorization;
+
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        try {
+          const token = authHeader.split(" ")[1];
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          email = decoded.email;
+        } catch (err) {
+          console.log("⚠ Could not decode token:", err.message);
+        }
+      }
+    }
+
     if (!email) {
       return res.status(400).json({
         message: "User email is required for payment"
@@ -586,17 +603,11 @@ app.post("/api/plans/purchase", async (req, res) => {
       amount: Number(amount),
       currency: "XAF",
       description: `Purchase of plan ${planId}`,
-
-      // Your reference
       reference: merchantReference,
-
-      // Required by NotchPay
       email: email,
-
       callback: "https://computerarchi.com/api/payments/verify",
-
       metadata: {
-        planId: planId
+        planId
       }
     };
 
@@ -620,7 +631,6 @@ app.post("/api/plans/purchase", async (req, res) => {
       });
     }
 
-    // 🔑 Extract payment URL safely
     const paymentUrl =
       data?.data?.checkout_url ||
       data?.data?.payment_url ||
@@ -629,34 +639,21 @@ app.post("/api/plans/purchase", async (req, res) => {
       data?.data?.authorization_url ||
       data?.authorization_url;
 
-    // 🔑 Extract the real NotchPay reference
     const reference =
       data?.data?.reference ||
       data?.reference;
 
-    if (!paymentUrl) {
-      console.log("❌ Checkout URL missing in response");
-
+    if (!paymentUrl || !reference) {
       return res.status(500).json({
-        message: "Payment URL not received from NotchPay",
+        message: "Invalid NotchPay response",
         notchpay_response: data
       });
     }
 
-    if (!reference) {
-      console.log("❌ Reference missing in response");
-
-      return res.status(500).json({
-        message: "Payment reference not received from NotchPay",
-        notchpay_response: data
-      });
-    }
-
-    // Send clean response to frontend
     return res.json({
       success: true,
-      paymentUrl: paymentUrl,
-      reference: reference
+      paymentUrl,
+      reference
     });
 
   } catch (err) {
