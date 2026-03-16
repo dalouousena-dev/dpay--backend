@@ -758,15 +758,29 @@ app.get("/api/payments/verify", async (req, res) => {
     }
 
     // Email must come from metadata
-   const email =
-  transaction?.metadata?.email ||
-  transaction?.customer?.email ||
-  transaction?.customer_email ||
-  null;
-    if (!email) {
-      console.log("❌ Missing customer email");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-    }
+ let email = payment.metadata?.email || null;
+
+// If email not provided by NotchPay, recover user from reference
+if (!email) {
+  const merchantRef = payment.merchant_reference;
+
+  const { data: transaction } = await supabase
+    .from("transactions")
+    .select("user_email")
+    .eq("reference", merchantRef)
+    .maybeSingle();
+
+  if (transaction) {
+    email = transaction.user_email;
+  }
+}
+
+if (!email) {
+  console.error("Customer email missing and cannot recover user");
+  return res.status(400).json({
+    message: "Customer email missing"
+  });
+}
 
     // Prevent duplicate transactions
     const { data: existing } = await supabase
