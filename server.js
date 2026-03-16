@@ -597,7 +597,7 @@ app.post("/api/plans/purchase", async (req, res) => {
       });
     }
 
-const merchantReference = plan_${planId}_${Date.now()}; 
+const merchantReference = `plan_${planId}_${Date.now()}`;
     await supabase 
       .from("pending_payments") 
       .insert({ 
