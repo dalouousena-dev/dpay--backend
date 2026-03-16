@@ -598,7 +598,17 @@ app.post("/api/plans/purchase", async (req, res) => {
     }
 
     const merchantReference = `plan_${planId}_${Date.now()}`;
-
+// 🔴 SAVE PAYMENT FIRST
+await supabase
+  .from("pending_payments")
+  .insert({
+    merchant_reference: merchantReference,
+    user_email: email,
+    plan_id: planId,
+    amount: amount,
+    created_at: new Date()
+  });
+    
     const payload = {
       amount: Number(amount),
       currency: "XAF",
@@ -675,162 +685,15 @@ if (!reference) {
 });
 
 
-app.get("/api/payments/verify", async (req, res) => {
-  try {
+app.get("/api/payments/verify", (req, res) => {
 
-    console.log("VERIFY QUERY:", req.query);
+  console.log("🔁 NotchPay redirect received:", req.query);
 
-    // Get reference
-   let reference =
-  req.query.reference ||
-  req.query.trxref ||
-  req.query.transaction_id;
-   console.log("REFERENCE USED FOR VERIFICATION:", reference);
-    if (!reference) {
-      console.log("❌ Missing reference");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-    }
+  // simply redirect user back to dashboard
+  return res.redirect(
+    "https://computerarchi.com/Dpay/dashboard?notchpay_status=success"
+  );
 
-    reference = String(reference).trim();
-
-    const apiKey = process.env.NOTCHPAY_API_KEY;
-
-    if (!apiKey) {
-      console.log("❌ Missing NOTCHPAY_API_KEY");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-    }
-
-    // Correct endpoint
-    const endpoint = `https://api.notchpay.co/payments/verify/${reference}`;
-
-    console.log("VERIFY ENDPOINT:", endpoint);
-
-    const verifyResponse = await fetch(endpoint, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        Accept: "application/json"
-      }
-    });
-
-    const verifyData = await verifyResponse.json();
-
-    console.log("NOTCHPAY VERIFY RESPONSE:", JSON.stringify(verifyData, null, 2));
-
-    if (!verifyResponse.ok) {
-      console.log("❌ Verification request failed");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-    }
-
-   const transaction = verifyData?.transaction || verifyData?.data;
-    console.log("TRANSACTION OBJECT:", transaction);
-    if (!transaction) {
-      console.log("❌ Invalid transaction object");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-    }
-
-    const status = (transaction.status || "").toLowerCase();
-
-    console.log("PAYMENT STATUS:", status);
-
-    if (status === "pending") {
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
-    }
-
-    if (!["complete", "completed", "success"].includes(status)) {
-      console.log("❌ Payment failed:", status);
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-    }
-
-    const amount = Number(transaction.amount || transaction.amounts?.total || 0);
-
-    // Extract planId
-    let planId = transaction?.metadata?.planId;
-
-    if (!planId && transaction?.merchant_reference) {
-      const parts = transaction.merchant_reference.split("_");
-      planId = parts[1];
-    }
-
-    if (!planId) {
-      console.log("❌ Plan ID not found");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-    }
-
-    // Email must come from metadata
-const email =
-  payment.metadata?.email ||
-  payment.customer_email ||
-  payment.customer?.email ||
-  null;
-
-if (!email) {
-  console.error("Customer email missing");
-  return res.status(400).json({
-    message: "Customer email missing"
-  });
-}
-
-    // Prevent duplicate transactions
-    const { data: existing } = await supabase
-      .from("transactions")
-      .select("reference")
-      .eq("reference", reference)
-      .maybeSingle();
-
-    if (existing) {
-      console.log("⚠ Transaction already processed");
-      return res.redirect(`https://computerarchi.com/Dpay/dashboard?notchpay_status=success&reference=${reference}`);
-    }
-
-    // Find user
-    const { data: user, error: userError } = await supabase
-      .from("users")
-      .select("*")
-      .eq("email", email)
-      .single();
-
-    if (userError || !user) {
-      console.log("❌ User not found:", email);
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-    }
-
-    const newTotalDeposited = (user.total_deposited || 0) + amount;
-
-    // Update user
-    await supabase
-      .from("users")
-      .update({
-        active_plan: planId,
-        total_deposited: newTotalDeposited,
-        last_transaction_date: new Date(),
-        withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-      })
-      .eq("email", email);
-
-    // Save transaction
-    await supabase
-      .from("transactions")
-      .insert({
-        user_email: email,
-        type: "plan_purchase",
-        description: `Purchase of plan ${planId}`,
-        amount,
-        status: "completed",
-        reference,
-        at: new Date()
-      });
-
-    console.log("✅ Payment verified and saved");
-
-    return res.redirect(`https://computerarchi.com/Dpay/dashboard?notchpay_status=success&reference=${reference}`);
-
-  } catch (err) {
-
-    console.error("Verification error:", err);
-
-    return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
-  }
 });
 
 app.get("/api/payments/check/:reference", async (req, res) => {
