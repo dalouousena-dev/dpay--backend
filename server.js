@@ -977,7 +977,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
 
     console.log("🔔 NotchPay callback received:", req.body);
 
-    const reference = req.body.trxref || req.body.reference;
+    const reference = req.body.data?.reference || req.body.reference;
 
     if (!reference) {
       return res.status(400).json({
@@ -1003,7 +1003,7 @@ const endpoint = `${baseURL}/payments/${reference}`;
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
       headers: {
-       Authorization: process.env.NOTCHPAY_API_KEY,
+     Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`,
         "Content-Type": "application/json"
       }
     });
@@ -1033,8 +1033,16 @@ const endpoint = `${baseURL}/payments/${reference}`;
 
     const amount = Number(transaction.amount);
 
-    const parts = transaction.reference ? transaction.reference.split("_") : [];
-    const planId = parts[1] || transaction.metadata?.planId || null;
+   let planId = null;
+
+if (transaction.merchant_reference) {
+  const parts = transaction.merchant_reference.split("_");
+  planId = parts[1];
+}
+
+if (!planId) {
+  planId = transaction.metadata?.planId || null;
+}
 
     const email =
       transaction.customer_email ||
