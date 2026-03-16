@@ -681,9 +681,9 @@ app.get("/api/payments/verify", async (req, res) => {
 
     // Get reference
     let reference =
-      req.query.reference ||
-      req.query.trxref ||
-      req.query.transaction_id;
+  req.query.trxref ||
+  req.query.reference ||
+  req.query.transaction_id;
 
     if (!reference) {
       console.log("❌ Missing reference");
@@ -722,7 +722,7 @@ app.get("/api/payments/verify", async (req, res) => {
     }
 
     const transaction = verifyData?.data;
-
+    console.log("TRANSACTION OBJECT:", transaction);
     if (!transaction) {
       console.log("❌ Invalid transaction object");
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
@@ -757,11 +757,11 @@ app.get("/api/payments/verify", async (req, res) => {
     }
 
     // Email must come from metadata
-    const email =
-      transaction?.metadata?.email ||
-      transaction?.customer_email ||
-      null;
-
+   const email =
+  transaction?.metadata?.email ||
+  transaction?.customer?.email ||
+  transaction?.customer_email ||
+  null;
     if (!email) {
       console.log("❌ Missing customer email");
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
