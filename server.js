@@ -690,7 +690,6 @@ app.get("/api/payments/verify", async (req, res) => {
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-    // Only allow valid NotchPay reference
     reference = String(reference).trim();
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
@@ -700,6 +699,7 @@ app.get("/api/payments/verify", async (req, res) => {
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
+    // Correct endpoint
     const endpoint = `https://api.notchpay.co/payments/${reference}`;
 
     console.log("VERIFY ENDPOINT:", endpoint);
@@ -707,8 +707,8 @@ app.get("/api/payments/verify", async (req, res) => {
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
       headers: {
-        Authorization: apiKey,
-        "Content-Type": "application/json"
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json"
       }
     });
 
@@ -721,10 +721,7 @@ app.get("/api/payments/verify", async (req, res) => {
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-    const transaction =
-      verifyData?.data ||
-      verifyData?.transaction ||
-      verifyData;
+    const transaction = verifyData?.data;
 
     if (!transaction) {
       console.log("❌ Invalid transaction object");
@@ -759,11 +756,10 @@ app.get("/api/payments/verify", async (req, res) => {
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-    // Extract email
+    // Email must come from metadata
     const email =
-      transaction?.customer?.email ||
+      transaction?.metadata?.email ||
       transaction?.customer_email ||
-      verifyData?.customer?.email ||
       null;
 
     if (!email) {
