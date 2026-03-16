@@ -700,7 +700,7 @@ app.get("/api/payments/verify", async (req, res) => {
     }
 
     // Correct endpoint
-    const endpoint = `https://api.notchpay.co/payments/${reference}`;
+    const endpoint = `https://api.notchpay.co/payments/verify/${reference}`;
 
     console.log("VERIFY ENDPOINT:", endpoint);
 
