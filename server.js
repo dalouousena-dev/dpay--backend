@@ -604,10 +604,11 @@ app.post("/api/plans/purchase", async (req, res) => {
       currency: "XAF",
       description: `Purchase of plan ${planId}`,
       reference: merchantReference,
-      email: email,
+       email: email,
       callback: "https://dpaybackend.onrender.com/api/payments/verify",
       metadata: {
-  planId
+  planId: planId,
+  email: email
 }
     };
 
