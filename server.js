@@ -689,22 +689,30 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
-    if (!apiKey) {
-      return res.status(500).json({
-        message: "Missing NOTCHPAY_API_KEY"
+    // get email from authenticated user
+    const email = req.user?.email;
+
+    if (!email) {
+      return res.status(400).json({
+        message: "User email is required for payment"
       });
     }
 
-    // Your own reference
     const merchantReference = `plan_${planId}_${Date.now()}`;
 
     const payload = {
-      amount,
+      amount: Number(amount),
       currency: "XAF",
       description: `Purchase of plan ${planId}`,
       reference: merchantReference,
       callback: "https://computerarchi.com/api/payments/verify",
-      metadata: { planId }
+
+      // 🔴 THIS WAS MISSING
+      email: email,
+
+      metadata: {
+        planId
+      }
     };
 
     const response = await fetch("https://api.notchpay.co/payments", {
@@ -727,28 +735,19 @@ app.post("/api/plans/purchase", async (req, res) => {
       });
     }
 
-    // Extract checkout URL
     const paymentUrl =
       data?.checkout_url ||
       data?.data?.checkout_url ||
       data?.authorization_url ||
       data?.data?.authorization_url;
 
-    // Extract the REAL NotchPay reference
     const reference =
       data?.reference ||
       data?.data?.reference;
 
-    if (!paymentUrl || !reference) {
-      return res.status(500).json({
-        message: "Invalid NotchPay response",
-        notchpay_response: data
-      });
-    }
-
     res.json({
       paymentUrl,
-      reference   // this must be trx.test_xxxxx
+      reference
     });
 
   } catch (err) {
