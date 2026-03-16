@@ -653,10 +653,10 @@ app.post("/api/payments/initiate", async (req, res) => {
     }
 
     const paymentUrl =
-      data?.authorization_url ||
-      data?.checkout_url ||
-      data?.data?.authorization_url ||
-      data?.data?.checkout_url;
+      data?.authorizationurl ||
+      data?.checkouturl ||
+      data?.data?.authorizationurl ||
+      data?.data?.checkouturl;
 
     if (!paymentUrl) {
       console.log("❌ Checkout URL not received");
