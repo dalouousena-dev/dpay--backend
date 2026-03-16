@@ -732,7 +732,7 @@ app.post("/api/payments/create", async (req, res) => {
 
     const reference = `payment_${Date.now()}`;
 
-    const response = await fetch("https://apisandbox.notchpay.co/payments", {
+    const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
       headers: {
        Authorization: process.env.NOTCHPAY_API_KEY,
@@ -812,9 +812,11 @@ app.get("/api/payments/verify", async (req, res) => {
     }
 
     // Choose correct endpoint
-    const endpoint = apiKey.startsWith("sk_test")
-      ? `https://apisandbox.notchpay.co/payments/${reference}`
-      : `https://api.notchpay.co/payments/${reference}`;
+   const baseURL = apiKey.startsWith("sk_test")
+  ? "https://apisandbox.notchpay.co"
+  : "https://api.notchpay.co";
+
+const endpoint = `${baseURL}/payments/${reference}`;
 
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
@@ -964,11 +966,13 @@ app.get("/api/payments/check/:reference", async (req, res) => {
       return res.status(400).json({ message: "Missing reference" });
     }
 
-    const apiKey = process.env.NOTCHPAY_API_KEY;
+const apiKey = process.env.NOTCHPAY_API_KEY;
 
-    const endpoint = apiKey.startsWith("sk_test")
-      ? `https://apisandbox.notchpay.co/payments/${reference}`
-      : `https://api.notchpay.co/payments/${reference}`;
+const baseURL = apiKey.startsWith("sk_test")
+  ? "https://apisandbox.notchpay.co"
+  : "https://api.notchpay.co";
+
+const endpoint = `${baseURL}/payments/${reference}`;
 
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
@@ -1118,9 +1122,11 @@ app.post("/api/notchpay/webhook", async (req, res) => {
     }
 
     // Correct endpoints
-    const endpoint = apiKey.startsWith("sk_test")
-      ? `https://apisandbox.notchpay.co/payments/${reference}`
-      : `https://api.notchpay.co/payments/${reference}`;
+   const baseURL = apiKey.startsWith("sk_test")
+  ? "https://apisandbox.notchpay.co"
+  : "https://api.notchpay.co";
+
+const endpoint = `${baseURL}/payments/${reference}`;
 
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
