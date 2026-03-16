@@ -631,24 +631,33 @@ app.post("/api/plans/purchase", async (req, res) => {
       });
     }
 
-    const paymentUrl =
-      data?.data?.checkout_url ||
-      data?.data?.payment_url ||
-      data?.checkout_url ||
-      data?.payment_url ||
-      data?.data?.authorization_url ||
-      data?.authorization_url;
+   const paymentUrl =
+  data?.data?.checkout_url ||
+  data?.checkout_url ||
+  data?.data?.authorization_url ||
+  data?.authorization_url;
 
-    const reference =
-      data?.data?.reference ||
-      data?.reference;
+// Extract reference safely
+const reference =
+  data?.data?.reference ||
+  data?.reference ||
+  data?.data?.trxref ||
+  data?.trxref ||
+  data?.data?.merchant_reference ||
+  data?.merchant_reference;
 
-    if (!paymentUrl || !reference) {
-      return res.status(500).json({
-        message: "Invalid NotchPay response",
-        notchpay_response: data
-      });
-    }
+if (!paymentUrl) {
+  return res.status(500).json({
+    message: "Payment URL not received from NotchPay",
+    notchpay_response: data
+  });
+}
+if (!reference) {
+  return res.status(500).json({
+    message: "Payment reference not received from NotchPay",
+    notchpay_response: data
+  });
+}
 
     return res.json({
       success: true,
