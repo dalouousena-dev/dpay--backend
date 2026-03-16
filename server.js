@@ -682,6 +682,54 @@ app.post("/api/payments/initiate", async (req, res) => {
   }
 });
 
+app.post("/api/plans/purchase", async (req, res) => {
+  try {
+
+    const { planId, amount } = req.body;
+
+    const apiKey = process.env.NOTCHPAY_API_KEY;
+
+    const reference = `plan_${planId}_${Date.now()}`;
+
+    const payload = {
+      amount,
+      currency: "XAF",
+      description: `Purchase of plan ${planId}`,
+      reference,
+      callback: "https://computerarchi.com/api/payments/verify",
+      metadata: { planId }
+    };
+
+    const response = await fetch("https://api.notchpay.co/payments", {
+      method: "POST",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    const paymentUrl =
+      data?.checkout_url ||
+      data?.data?.checkout_url;
+
+    res.json({
+      paymentUrl,
+      reference
+    });
+
+  } catch (err) {
+
+    console.error("Plan purchase error:", err);
+
+    res.status(500).json({
+      message: "Payment initialization failed"
+    });
+
+  }
+});
 
     // Create NotchPay payment
     
