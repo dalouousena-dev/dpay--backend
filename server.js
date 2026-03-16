@@ -732,7 +732,7 @@ app.post("/api/payments/create", async (req, res) => {
 
     const reference = `payment_${Date.now()}`;
 
-    const response = await fetch("https://api.notchpay.co/payments", {
+    const response = await fetch("https://api.notchpay.co", {
       method: "POST",
       headers: {
        Authorization: process.env.NOTCHPAY_API_KEY,
