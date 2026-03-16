@@ -602,113 +602,81 @@ app.get('/api/referral/code', async (req, res) => {
 
 
 // --- plan purchase endpoints ---
-app.post("/api/plans/purchase", async (req, res) => {
+app.post("/api/payments/initiate", async (req, res) => {
   try {
 
-    const authHeader = req.headers.authorization;
+    const { amount, email, planId, userId } = req.body;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Missing or invalid authorization token" });
-    }
+    const apiKey = process.env.NOTCHPAY_API_KEY;
 
-    const token = authHeader.split(" ")[1];
-
-    // Get user
-    const { data: user, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("token", token)
-      .single();
-
-    if (error || !user) {
-      return res.status(401).json({ message: "User not found or invalid token" });
-    }
-
-    const { planId, amount } = req.body;
-
-    if (!planId || !amount) {
-      return res.status(400).json({ message: "planId and amount are required" });
+    if (!apiKey) {
+      console.log("❌ Missing NOTCHPAY_API_KEY");
+      return res.status(500).json({ message: "Server configuration error" });
     }
 
     const reference = `plan_${planId}_${Date.now()}`;
 
-    console.log("Creating payment:", {
-      email: user.email,
-      planId,
-      amount,
-      reference
-    });
+    const payload = {
+      amount: amount,
+      currency: "XAF",
+      description: `Purchase of plan ${planId}`,
+      reference: reference,
+      callback: "https://computerarchi.com/api/payments/verify",
+      customer: {
+        email: email
+      },
+      metadata: {
+        planId: planId,
+        userId: userId
+      }
+    };
 
-    // Create payment with NotchPay
     const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-       Authorization: process.env.NOTCHPAY_API_KEY
+        Authorization: apiKey,
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        amount: Number(amount),
-        currency: "XAF",
-        reference: reference,
-        description: `Purchase of plan ${planId}`,
-
-        callback_url: "https://dpaybackend.onrender.com/api/payments/verify",
-
-        success_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=success",
-        cancel_url: "https://computerarchi.com/Dpay/dashboard?notchpay_status=error",
-
-        customer: {
-          email: user.email,
-          name: user.username
-        },
-
-        metadata: {
-          planId,
-          userId: user.id
-        }
-      })
+      body: JSON.stringify(payload)
     });
 
-   const paymentUrl =
-  data?.authorization_url ||
-  data?.checkout_url ||
-  data?.data?.authorization_url ||
-  data?.data?.checkout_url;
+    const data = await response.json();
 
-console.log("NotchPay response:", data);
-console.log("Payment URL:", paymentUrl);
+    console.log("NotchPay response:", data);
 
-if (!paymentUrl) {
-  console.error("Payment URL not received:", data);
-  return res.status(500).json({
-    message: "Payment URL not received",
-    notchpay_response: data
-  });
-}
+    if (!response.ok) {
+      console.log("❌ Payment initialization failed");
+      return res.status(500).json({
+        message: "Payment initialization failed",
+        notchpay_response: data
+      });
+    }
 
-    // ✅ Save payment in database
-    await supabase.from("payments").insert({
-      user_id: user.id,
-      email: user.email,
-      plan_id: planId,
-      amount: amount,
-      reference: reference,
-      status: "pending"
-    });
+    const paymentUrl =
+      data?.authorization_url ||
+      data?.checkout_url ||
+      data?.data?.authorization_url ||
+      data?.data?.checkout_url;
 
-    // Send payment link to frontend
+    if (!paymentUrl) {
+      console.log("❌ Checkout URL not received");
+      return res.status(500).json({
+        message: "Payment URL not received",
+        notchpay_response: data
+      });
+    }
+
     res.json({
-      payment_url: paymentUrl,
-      reference
+      checkout_url: paymentUrl,
+      reference: reference
     });
 
-  } catch (err) {
+  } catch (error) {
 
-    console.error("Payment initialization failed:", err);
+    console.error("Payment initialization failed:", error);
 
     res.status(500).json({
-      message: "Payment initialization failed",
-      error: err.message
+      message: "Payment initialization failed"
     });
 
   }
