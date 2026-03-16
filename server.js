@@ -680,11 +680,11 @@ app.get("/api/payments/verify", async (req, res) => {
     console.log("VERIFY QUERY:", req.query);
 
     // Get reference
-    let reference =
-  req.query.trxref ||
+   let reference =
   req.query.reference ||
+  req.query.trxref ||
   req.query.transaction_id;
-
+   console.log("REFERENCE USED FOR VERIFICATION:", reference);
     if (!reference) {
       console.log("❌ Missing reference");
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
