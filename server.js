@@ -723,31 +723,40 @@ app.post("/api/plans/purchase", async (req, res) => {
       body: JSON.stringify(payload)
     });
 
-    const data = await response.json();
+const data = await response.json();
 
-    console.log("NOTCHPAY INIT RESPONSE:", data);
+console.log("NOTCHPAY INIT RESPONSE:", JSON.stringify(data, null, 2));
 
-    if (!response.ok) {
-      return res.status(500).json({
-        message: "NotchPay initialization failed",
-        notchpay_response: data
-      });
-    }
+if (!response.ok) {
+  return res.status(500).json({
+    message: "NotchPay initialization failed",
+    notchpay_response: data
+  });
+}
 
-    const paymentUrl =
-      data?.checkout_url ||
-      data?.data?.checkout_url ||
-      data?.authorization_url ||
-      data?.data?.authorization_url;
+// Extract checkout URL
+const paymentUrl =
+  data?.data?.checkout_url ||
+  data?.checkout_url ||
+  data?.data?.authorization_url ||
+  data?.authorization_url;
 
-    const reference =
-      data?.reference ||
-      data?.data?.reference;
+// Extract the real NotchPay reference
+const reference =
+  data?.data?.reference ||
+  data?.reference;
 
-    res.json({
-      paymentUrl,
-      reference
-    });
+if (!paymentUrl || !reference) {
+  return res.status(500).json({
+    message: "Invalid NotchPay response",
+    notchpay_response: data
+  });
+}
+
+res.json({
+  paymentUrl,
+  reference
+});
 
   } catch (err) {
 
