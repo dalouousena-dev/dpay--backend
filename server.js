@@ -792,6 +792,7 @@ app.get("/api/payments/verify", async (req, res) => {
 
     console.log("VERIFY QUERY:", req.query);
 
+    // Get transaction reference
     const reference =
       req.query.reference ||
       req.query.trxref ||
@@ -799,27 +800,27 @@ app.get("/api/payments/verify", async (req, res) => {
 
     if (!reference) {
       console.log("❌ Missing reference");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+      return res.redirect(
+        "https://computerarchi.com/Dpay/dashboard?notchpay_status=error"
+      );
     }
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
     if (!apiKey) {
       console.log("❌ Missing NOTCHPAY_API_KEY");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+      return res.redirect(
+        "https://computerarchi.com/Dpay/dashboard?notchpay_status=error"
+      );
     }
 
-    // Choose correct endpoint
-   const baseURL = apiKey.startsWith("sk_test")
-  ? "https://apisandbox.notchpay.co"
-  : "https://api.notchpay.co";
-
-const endpoint = `${baseURL}/payments/${reference}`;
+    // NotchPay verification endpoint
+    const endpoint = `https://api.notchpay.co/payments/${reference}`;
 
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
       headers: {
-       Authorization: process.env.NOTCHPAY_API_KEY,
+        Authorization: apiKey,
         "Content-Type": "application/json"
       }
     });
@@ -830,10 +831,12 @@ const endpoint = `${baseURL}/payments/${reference}`;
 
     if (!verifyResponse.ok) {
       console.log("❌ Verification request failed");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+      return res.redirect(
+        "https://computerarchi.com/Dpay/dashboard?notchpay_status=error"
+      );
     }
 
-    // Extract transaction safely
+    // Extract transaction
     const transaction =
       verifyData?.data ||
       verifyData?.transaction ||
@@ -841,14 +844,27 @@ const endpoint = `${baseURL}/payments/${reference}`;
 
     if (!transaction) {
       console.log("❌ Invalid transaction response");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+      return res.redirect(
+        "https://computerarchi.com/Dpay/dashboard?notchpay_status=error"
+      );
     }
 
     const status = (transaction.status || "").toLowerCase();
 
+    // Payment not completed yet
+    if (status === "pending") {
+      console.log("⏳ Payment still pending");
+      return res.redirect(
+        "https://computerarchi.com/Dpay/dashboard?notchpay_status=pending"
+      );
+    }
+
+    // Payment failed
     if (!["complete", "completed", "success"].includes(status)) {
-      console.log("⏳ Transaction not complete:", status);
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=pending");
+      console.log("❌ Payment not successful:", status);
+      return res.redirect(
+        "https://computerarchi.com/Dpay/dashboard?notchpay_status=error"
+      );
     }
 
     const amount = Number(transaction.amount || 0);
@@ -863,7 +879,9 @@ const endpoint = `${baseURL}/payments/${reference}`;
 
     if (!planId) {
       console.log("❌ Plan ID not found");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+      return res.redirect(
+        "https://computerarchi.com/Dpay/dashboard?notchpay_status=error"
+      );
     }
 
     // Extract email
@@ -875,10 +893,12 @@ const endpoint = `${baseURL}/payments/${reference}`;
 
     if (!email) {
       console.log("❌ Missing email");
-      return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
+      return res.redirect(
+        "https://computerarchi.com/Dpay/dashboard?notchpay_status=error"
+      );
     }
 
-    // Prevent duplicate transaction
+    // Prevent duplicate processing
     const { data: existing } = await supabase
       .from("transactions")
       .select("reference")
@@ -907,21 +927,18 @@ const endpoint = `${baseURL}/payments/${reference}`;
       );
     }
 
-    // Calculate new values
+    // Update user account
     const newTotalDeposited = (user.total_deposited || 0) + amount;
 
-    // ⚠ usually wallet should NOT increase for plan purchase
-    const newWalletBalance = user.wallet_balance || 0;
-
-    // Update user
     await supabase
       .from("users")
       .update({
         active_plan: planId,
         total_deposited: newTotalDeposited,
-        wallet_balance: newWalletBalance,
         last_transaction_date: new Date(),
-        withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        withdrawal_available_at: new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000
+        )
       })
       .eq("email", email);
 
