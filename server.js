@@ -597,54 +597,7 @@ app.post("/api/plans/purchase", async (req, res) => {
       });
     }
 
-const merchantReference = `plan_${planId}_${Date.now()}`;
-
-// 🔎 Find the user first using the email you received
-const { data: user, error: userError } = await supabase
-  .from("users")
-  .select("id")
-  .eq("email", email)
-  .single();
-
-if (userError || !user) {
-  console.error("❌ User not found:", email);
-  return res.status(404).json({
-    message: "User not found"
-  });
-}
-
-// 🔴 SAVE PAYMENT FIRST using user_id
-const { error: insertError } = await supabase
-  .from("pending_payments")
-  .insert({
-    merchant_reference: merchantReference,
-    user_id: user.id,
-    plan_id: planId,
-    amount: amount,
-    created_at: new Date()
-  });
-
-if (insertError) {
-  console.error("❌ Failed to save pending payment:", insertError);
-  return res.status(500).json({
-    message: "Failed to create pending payment"
-  });
-}
-
-console.log("✅ Pending payment saved:", merchantReference);
-
-// 🟢 Create NotchPay payment
-const payload = {
-  amount: Number(amount),
-  currency: "XAF",
-  description: `Purchase of plan ${planId}`,
-  reference: merchantReference,
-  email: email,
-  callback: "https://dpaybackend.onrender.com/api/payments/verify",
-  metadata: {
-    planId: String(planId)
-  }
-};
+const merchantReference = plan_${planId}_${Date.now()};
 
     const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
