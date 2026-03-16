@@ -615,7 +615,7 @@ app.post("/api/plans/purchase", async (req, res) => {
     const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
       headers: {
-        Authorization: apiKey,
+       Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(payload)
