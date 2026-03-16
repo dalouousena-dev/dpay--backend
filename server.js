@@ -631,20 +631,17 @@ app.post("/api/plans/purchase", async (req, res) => {
       });
     }
 
-   const paymentUrl =
-  data?.data?.checkout_url ||
-  data?.checkout_url ||
+  const paymentUrl =
+  data?.authorization_url ||
   data?.data?.authorization_url ||
-  data?.authorization_url;
+  data?.checkout_url ||
+  data?.data?.checkout_url;
 
-// Extract reference safely
 const reference =
-  data?.data?.reference ||
   data?.reference ||
-  data?.data?.trxref ||
   data?.trxref ||
-  data?.data?.merchant_reference ||
-  data?.merchant_reference;
+  data?.merchant_reference ||
+  merchantReference;
 
 if (!paymentUrl) {
   return res.status(500).json({
@@ -662,7 +659,7 @@ if (!reference) {
     return res.json({
       success: true,
       paymentUrl,
-      reference
+      reference: reference || merchantReference
     });
 
   } catch (err) {
