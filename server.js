@@ -557,7 +557,13 @@ app.get('/api/referral/stats', async (req, res) => {
 app.post("/api/plans/purchase", async (req, res) => {
   try {
 
-    const { planId, amount } = req.body;
+   const PLAN_PRICES = {
+  vip1: 10000,
+  vip2: 25000,
+  vip3: 50000
+};
+
+const amount = PLAN_PRICES[planId];
 
     let email = req.body.email;
 
