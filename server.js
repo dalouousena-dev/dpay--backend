@@ -685,12 +685,11 @@ app.post("/api/payments/initiate", async (req, res) => {
 app.post("/api/plans/purchase", async (req, res) => {
   try {
 
-    const { planId, amount } = req.body;
+    const { planId, amount, email } = req.body;
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
     // get email from authenticated user
-    const email = req.user?.email;
 
     if (!email) {
       return res.status(400).json({
