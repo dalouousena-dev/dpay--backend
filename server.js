@@ -1003,7 +1003,7 @@ const endpoint = `${baseURL}/payments/${reference}`;
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
       headers: {
-     Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`,
+    Authorization: process.env.NOTCHPAY_API_KEY,
         "Content-Type": "application/json"
       }
     });
