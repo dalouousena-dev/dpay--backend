@@ -605,7 +605,7 @@ app.post("/api/plans/purchase", async (req, res) => {
       description: `Purchase of plan ${planId}`,
       reference: merchantReference,
       email: email,
-      callback: "https://computerarchi.com/api/payments/verify",
+      callback: "https://dpaybackend.onrender.com/api/payments/verify",
       metadata: {
         planId
       }
