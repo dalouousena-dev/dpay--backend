@@ -984,66 +984,43 @@ app.post("/api/notchpay/webhook", async (req, res) => {
     const payment = req.body.data;
 
     if (!payment) {
-      return res.status(400).json({
-        message: "Missing payment data"
-      });
+      return res.status(400).json({ message: "Invalid webhook payload" });
     }
 
-    // Only process completed payments
+    // Only process successful payments
     if (payment.status !== "complete") {
-      console.log("Payment not completed:", payment.status);
-      return res.status(200).json({ message: "Ignoring non-complete payment" });
+      console.log("Ignoring payment with status:", payment.status);
+      return res.status(200).send("Ignored");
     }
 
     const reference = payment.reference;
+    const merchantRef = payment.merchant_reference;
     const amount = Number(payment.amount);
 
-    if (!reference) {
+    if (!reference || !merchantRef) {
       return res.status(400).json({
         message: "Missing payment reference"
       });
     }
 
-    // Extract planId
-    let planId = null;
-
-    if (payment.merchant_reference) {
-      const parts = payment.merchant_reference.split("_");
-      planId = parts[1];
-    }
-
-    if (!planId) {
-      planId = payment.metadata?.planId || null;
-    }
+    // Extract planId from merchant reference
+    const parts = merchantRef.split("_");
+    const planId = parts[1];
 
     if (!planId) {
       return res.status(400).json({
-        message: "Plan ID missing"
-      });
-    }
-
-    // Extract email
-    const email =
-      payment.metadata?.email ||
-      payment.customer_email ||
-      payment.customer?.email ||
-      null;
-
-    if (!email) {
-      console.error("Customer email missing");
-      return res.status(400).json({
-        message: "Customer email missing"
+        message: "Invalid merchant reference"
       });
     }
 
     // Prevent duplicate processing
-    const { data: existingTransaction } = await supabase
+    const { data: existing } = await supabase
       .from("transactions")
       .select("*")
       .eq("reference", reference)
       .maybeSingle();
 
-    if (existingTransaction) {
+    if (existing) {
       console.log("⚠ Transaction already processed:", reference);
       return res.json({
         success: true,
@@ -1051,15 +1028,31 @@ app.post("/api/notchpay/webhook", async (req, res) => {
       });
     }
 
-    // Find user
+    // Find user using stored merchant reference
+    const { data: pendingPayment } = await supabase
+      .from("pending_payments")
+      .select("*")
+      .eq("merchant_reference", merchantRef)
+      .maybeSingle();
+
+    if (!pendingPayment) {
+      console.error("User not found for merchant reference:", merchantRef);
+      return res.status(404).json({
+        message: "Pending payment record not found"
+      });
+    }
+
+    const userId = pendingPayment.user_id;
+
+    // Fetch user
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
-      .eq("email", email)
+      .eq("id", userId)
       .single();
 
     if (userError || !user) {
-      console.error("User not found:", email);
+      console.error("User not found:", userId);
       return res.status(404).json({
         message: "User not found"
       });
@@ -1067,7 +1060,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
 
     const newTotalDeposited = (user.total_deposited || 0) + amount;
 
-    // Update user
+    // Update user plan
     const { error: updateError } = await supabase
       .from("users")
       .update({
@@ -1076,7 +1069,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
         last_transaction_date: new Date(),
         withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       })
-      .eq("email", email);
+      .eq("id", userId);
 
     if (updateError) {
       console.error("User update error:", updateError);
@@ -1085,11 +1078,11 @@ app.post("/api/notchpay/webhook", async (req, res) => {
       });
     }
 
-    // Insert transaction
+    // Save transaction
     const { error: insertError } = await supabase
       .from("transactions")
       .insert({
-        user_email: email,
+        user_id: userId,
         type: "plan_purchase",
         description: `Purchase of plan ${planId}`,
         amount: amount,
@@ -1102,7 +1095,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
       console.error("Transaction insert error:", insertError);
     }
 
-    console.log("✅ Payment processed and plan activated:", email, planId);
+    console.log("✅ Payment processed and plan activated:", userId, planId);
 
     return res.json({
       success: true,
