@@ -689,13 +689,20 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
-    const reference = `plan_${planId}_${Date.now()}`;
+    if (!apiKey) {
+      return res.status(500).json({
+        message: "Missing NOTCHPAY_API_KEY"
+      });
+    }
+
+    // Your own reference
+    const merchantReference = `plan_${planId}_${Date.now()}`;
 
     const payload = {
       amount,
       currency: "XAF",
       description: `Purchase of plan ${planId}`,
-      reference,
+      reference: merchantReference,
       callback: "https://computerarchi.com/api/payments/verify",
       metadata: { planId }
     };
@@ -711,13 +718,37 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     const data = await response.json();
 
+    console.log("NOTCHPAY INIT RESPONSE:", data);
+
+    if (!response.ok) {
+      return res.status(500).json({
+        message: "NotchPay initialization failed",
+        notchpay_response: data
+      });
+    }
+
+    // Extract checkout URL
     const paymentUrl =
       data?.checkout_url ||
-      data?.data?.checkout_url;
+      data?.data?.checkout_url ||
+      data?.authorization_url ||
+      data?.data?.authorization_url;
+
+    // Extract the REAL NotchPay reference
+    const reference =
+      data?.reference ||
+      data?.data?.reference;
+
+    if (!paymentUrl || !reference) {
+      return res.status(500).json({
+        message: "Invalid NotchPay response",
+        notchpay_response: data
+      });
+    }
 
     res.json({
       paymentUrl,
-      reference
+      reference   // this must be trx.test_xxxxx
     });
 
   } catch (err) {
