@@ -607,8 +607,7 @@ app.post("/api/plans/purchase", async (req, res) => {
       email: email,
       callback: "https://dpaybackend.onrender.com/api/payments/verify",
       metadata: {
-  planId: planId,
-  email: user.email
+  planId
 }
     };
 
