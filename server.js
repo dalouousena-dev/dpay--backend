@@ -721,7 +721,7 @@ app.get("/api/payments/verify", async (req, res) => {
       return res.redirect("https://computerarchi.com/Dpay/dashboard?notchpay_status=error");
     }
 
-    const transaction = verifyData?.data;
+   const transaction = verifyData?.transaction || verifyData?.data;
     console.log("TRANSACTION OBJECT:", transaction);
     if (!transaction) {
       console.log("❌ Invalid transaction object");
@@ -1020,16 +1020,21 @@ const endpoint = `${baseURL}/payments/${reference}`;
     }
 
     // Safely extract transaction
-    const transaction =
-      verifyData?.data ||
-      verifyData?.transaction ||
-      verifyData;
+    const transaction = verifyData?.transaction;
 
-    if (!transaction || !["complete","completed","success"].includes(transaction.status)) {
-      return res.status(400).json({
-        message: "Payment not completed"
-      });
-    }
+if (!transaction) {
+  console.error("❌ Transaction not found in response");
+  return res.status(400).json({
+    message: "Invalid NotchPay response"
+  });
+}
+
+  if (transaction.status !== "complete") {
+  console.log("Payment not completed:", transaction.status);
+  return res.status(400).json({
+    message: "Payment not completed"
+  });
+}
 
     const amount = Number(transaction.amount);
 
