@@ -601,87 +601,6 @@ app.get('/api/referral/code', async (req, res) => {
 });
 
 
-// --- plan purchase endpoints ---
-app.post("/api/payments/initiate", async (req, res) => {
-  try {
-
-    const { amount, email, planId, userId } = req.body;
-
-    const apiKey = process.env.NOTCHPAY_API_KEY;
-
-    if (!apiKey) {
-      console.log("❌ Missing NOTCHPAY_API_KEY");
-      return res.status(500).json({ message: "Server configuration error" });
-    }
-
-    const reference = `plan_${planId}_${Date.now()}`;
-
-    const payload = {
-      amount: amount,
-      currency: "XAF",
-      description: `Purchase of plan ${planId}`,
-      reference: reference,
-      callback: "https://computerarchi.com/api/payments/verify",
-      customer: {
-        email: email
-      },
-      metadata: {
-        planId: planId,
-        userId: userId
-      }
-    };
-
-    const response = await fetch("https://api.notchpay.co/payments", {
-      method: "POST",
-      headers: {
-        Authorization: apiKey,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await response.json();
-
-    console.log("NotchPay response:", data);
-
-    if (!response.ok) {
-      console.log("❌ Payment initialization failed");
-      return res.status(500).json({
-        message: "Payment initialization failed",
-        notchpay_response: data
-      });
-    }
-
-    const paymentUrl =
-      data?.authorizationurl ||
-      data?.checkouturl ||
-      data?.data?.authorizationurl ||
-      data?.data?.checkouturl;
-
-    if (!paymentUrl) {
-      console.log("❌ Checkout URL not received");
-      return res.status(500).json({
-        message: "Payment URL not received",
-        notchpay_response: data
-      });
-    }
-
-    res.json({
-      checkout_url: paymentUrl,
-      reference: reference
-    });
-
-  } catch (error) {
-
-    console.error("Payment initialization failed:", error);
-
-    res.status(500).json({
-      message: "Payment initialization failed"
-    });
-
-  }
-});
-
 app.post("/api/plans/purchase", async (req, res) => {
   try {
 
@@ -770,40 +689,54 @@ res.json({
 });
 
     // Create NotchPay payment
-    
 app.post("/api/payments/create", async (req, res) => {
   try {
 
     const { amount, email } = req.body;
 
+    const apiKey = process.env.NOTCHPAY_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({
+        message: "NOTCHPAY_API_KEY missing in server environment"
+      });
+    }
+
+    // Validate input
     if (!amount || !email) {
       return res.status(400).json({
         message: "Amount and email are required"
       });
     }
 
-    const reference = `payment_${Date.now()}`;
+    const merchantReference = `payment_${Date.now()}`;
 
-    const response = await fetch("https://api.notchpay.co", {
+    const payload = {
+      amount: Number(amount),
+      currency: "XAF",
+      description: "Account payment",
+
+      // Your reference
+      reference: merchantReference,
+
+      // NotchPay requires email
+      email: email,
+
+      callback: "https://dpaybackend.onrender.com/api/payments/verify"
+    };
+
+    const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
       headers: {
-       Authorization: process.env.NOTCHPAY_API_KEY,
+        Authorization: apiKey,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        amount: Number(amount),
-        currency: "XAF",
-        reference: reference,
-        customer: {
-          email: email
-        },
-        callback_url: "https://dpaybackend.onrender.com/api/payments/verify"
-      })
+      body: JSON.stringify(payload)
     });
 
     const data = await response.json();
 
-    console.log("NOTCHPAY CREATE PAYMENT RESPONSE:", data);
+    console.log("NOTCHPAY CREATE PAYMENT RESPONSE:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return res.status(400).json({
@@ -812,17 +745,25 @@ app.post("/api/payments/create", async (req, res) => {
       });
     }
 
-    // ✅ extract payment link
-    const paymentUrl = data?.data?.checkout_url;
+    // Extract checkout URL safely
+    const paymentUrl =
+      data?.data?.checkout_url ||
+      data?.checkout_url ||
+      data?.data?.authorization_url ||
+      data?.authorization_url;
 
-    if (!paymentUrl) {
+    // Extract the REAL NotchPay reference
+    const reference =
+      data?.data?.reference ||
+      data?.reference;
+
+    if (!paymentUrl || !reference) {
       return res.status(500).json({
-        message: "Payment URL not received from NotchPay",
+        message: "Invalid NotchPay response",
         notchpay: data
       });
     }
 
-    // ✅ send clean response to frontend
     return res.json({
       success: true,
       payment_url: paymentUrl,
