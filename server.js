@@ -669,16 +669,14 @@ app.post("/api/plans/purchase", async (req, res) => {
       })
     });
 
-    const data = await response.json();
-
-    console.log("NotchPay response:", data);
-
-    const paymentUrl = data?.data?.checkout_url;
-
+   const paymentUrl =
   data?.authorization_url ||
   data?.checkout_url ||
   data?.data?.authorization_url ||
   data?.data?.checkout_url;
+
+console.log("NotchPay response:", data);
+console.log("Payment URL:", paymentUrl);
 
 if (!paymentUrl) {
   console.error("Payment URL not received:", data);
