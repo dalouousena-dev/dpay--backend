@@ -607,8 +607,9 @@ app.post("/api/plans/purchase", async (req, res) => {
       email: email,
       callback: "https://dpaybackend.onrender.com/api/payments/verify",
       metadata: {
-        planId
-      }
+  planId: planId,
+  email: user.email
+}
     };
 
     const response = await fetch("https://api.notchpay.co/payments", {
@@ -977,7 +978,22 @@ app.post("/api/notchpay/webhook", async (req, res) => {
 
     console.log("🔔 NotchPay callback received:", req.body);
 
-    const reference = req.body.data?.reference || req.body.reference;
+    const payment = req.body.data;
+
+    if (!payment) {
+      return res.status(400).json({
+        message: "Missing payment data"
+      });
+    }
+
+    // Only process completed payments
+    if (payment.status !== "complete") {
+      console.log("Payment not completed:", payment.status);
+      return res.status(200).json({ message: "Ignoring non-complete payment" });
+    }
+
+    const reference = payment.reference;
+    const amount = Number(payment.amount);
 
     if (!reference) {
       return res.status(400).json({
@@ -985,96 +1001,54 @@ app.post("/api/notchpay/webhook", async (req, res) => {
       });
     }
 
-    const apiKey = process.env.NOTCHPAY_API_KEY;
+    // Extract planId
+    let planId = null;
 
-    if (!apiKey) {
-      return res.status(500).json({
-        message: "NotchPay API key missing"
-      });
+    if (payment.merchant_reference) {
+      const parts = payment.merchant_reference.split("_");
+      planId = parts[1];
     }
 
-    // Correct endpoints
-   const baseURL = apiKey.startsWith("sk_test")
-  ? "https://apisandbox.notchpay.co"
-  : "https://api.notchpay.co";
+    if (!planId) {
+      planId = payment.metadata?.planId || null;
+    }
 
-const endpoint = `${baseURL}/payments/${reference}`;
-
-    const verifyResponse = await fetch(endpoint, {
-      method: "GET",
-      headers: {
-    Authorization: process.env.NOTCHPAY_API_KEY,
-        "Content-Type": "application/json"
-      }
-    });
-
-    const verifyData = await verifyResponse.json();
-
-    console.log("NOTCHPAY VERIFY DATA:", verifyData);
-
-    if (!verifyResponse.ok) {
-      console.error("❌ NotchPay verification failed:", verifyData);
+    if (!planId) {
       return res.status(400).json({
-        message: "Payment verification failed"
+        message: "Plan ID missing"
       });
     }
 
-    // Safely extract transaction
-    const transaction = verifyData?.transaction;
-
-if (!transaction) {
-  console.error("❌ Transaction not found in response");
-  return res.status(400).json({
-    message: "Invalid NotchPay response"
-  });
-}
-
-  if (transaction.status !== "complete") {
-  console.log("Payment not completed:", transaction.status);
-  return res.status(400).json({
-    message: "Payment not completed"
-  });
-}
-
-    const amount = Number(transaction.amount);
-
-   let planId = null;
-
-if (transaction.merchant_reference) {
-  const parts = transaction.merchant_reference.split("_");
-  planId = parts[1];
-}
-
-if (!planId) {
-  planId = transaction.metadata?.planId || null;
-}
-
+    // Extract email
     const email =
-      transaction.customer_email ||
-      transaction.customer?.email ||
+      payment.metadata?.email ||
+      payment.customer_email ||
+      payment.customer?.email ||
       null;
 
     if (!email) {
+      console.error("Customer email missing");
       return res.status(400).json({
         message: "Customer email missing"
       });
     }
 
-    // Prevent duplicate transactions
+    // Prevent duplicate processing
     const { data: existingTransaction } = await supabase
       .from("transactions")
       .select("*")
-      .eq("reference", transaction.reference)
+      .eq("reference", reference)
       .maybeSingle();
 
     if (existingTransaction) {
-      console.log("⚠ Transaction already processed:", transaction.reference);
+      console.log("⚠ Transaction already processed:", reference);
       return res.json({
         success: true,
-        message: "Transaction already verified"
+        message: "Transaction already processed"
       });
     }
 
+    // Find user
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
@@ -1090,14 +1064,11 @@ if (!planId) {
 
     const newTotalDeposited = (user.total_deposited || 0) + amount;
 
-    // Usually plan purchase should NOT credit wallet
-    const newWalletBalance = user.wallet_balance || 0;
-
+    // Update user
     const { error: updateError } = await supabase
       .from("users")
       .update({
         active_plan: planId,
-        wallet_balance: newWalletBalance,
         total_deposited: newTotalDeposited,
         last_transaction_date: new Date(),
         withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
@@ -1111,6 +1082,7 @@ if (!planId) {
       });
     }
 
+    // Insert transaction
     const { error: insertError } = await supabase
       .from("transactions")
       .insert({
@@ -1119,7 +1091,7 @@ if (!planId) {
         description: `Purchase of plan ${planId}`,
         amount: amount,
         status: "completed",
-        reference: transaction.reference,
+        reference: reference,
         at: new Date()
       });
 
@@ -1127,24 +1099,23 @@ if (!planId) {
       console.error("Transaction insert error:", insertError);
     }
 
-    console.log("✅ Payment verified and plan activated:", email, planId);
+    console.log("✅ Payment processed and plan activated:", email, planId);
 
     return res.json({
       success: true,
-      message: "Payment verified and plan activated"
+      message: "Payment processed successfully"
     });
 
   } catch (err) {
 
-    console.error("❌ Verification error:", err);
+    console.error("❌ Webhook processing error:", err);
 
     return res.status(500).json({
-      message: "Payment verification error"
+      message: "Webhook processing error"
     });
 
   }
 });
-
 
 app.get("/api/transactions", async (req, res) => {
   try {
