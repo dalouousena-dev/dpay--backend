@@ -605,9 +605,10 @@ const merchantReference = `plan_${planId}_${Date.now()}`;
         user_email: email, plan_id: planId, 
         amount: amount, 
         created_at: new Date() }); 
-    const payload = { amount: Number(amount), 
-                     currency: "XAF", 
-                     description: Purchase of plan ${planId}, 
+    const payload = { 
+      amount: Number(amount), 
+    currency: "XAF", 
+    description: `Purchase of plan ${planId}`,
     reference: merchantReference, 
       email: email, 
       callback: "https://dpaybackend.onrender.com/api/payments/verify", 
