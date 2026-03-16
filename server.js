@@ -764,25 +764,14 @@ app.get("/api/payments/verify", async (req, res) => {
     }
 
     // Email must come from metadata
- let email = payment.metadata?.email || null;
-
-// If email not provided by NotchPay, recover user from reference
-if (!email) {
-  const merchantRef = payment.merchant_reference;
-
-  const { data: transaction } = await supabase
-    .from("transactions")
-    .select("user_email")
-    .eq("reference", merchantRef)
-    .maybeSingle();
-
-  if (transaction) {
-    email = transaction.user_email;
-  }
-}
+const email =
+  payment.metadata?.email ||
+  payment.customer_email ||
+  payment.customer?.email ||
+  null;
 
 if (!email) {
-  console.error("Customer email missing and cannot recover user");
+  console.error("Customer email missing");
   return res.status(400).json({
     message: "Customer email missing"
   });
