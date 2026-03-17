@@ -598,25 +598,22 @@ app.post("/api/plans/purchase", async (req, res) => {
     }
 
 const merchantReference = `plan_${planId}_${Date.now()}`;
-    await supabase 
-      .from("transactions") 
-      .insert({ 
-        merchant_reference: merchantReference, 
-        user_id: userId, 
-        amount: amount, 
-        created_at: new Date() }); 
-   const payload = {
-  amount: Number(amount),
+
+await supabase.from("pending_payments").insert({
+  merchant_reference: merchantReference,
+  user_email: email,
+  plan_id: planId,
+  status: "pending"
+});
+
+// 🔴 THIS PART IS CRITICAL
+const paymentData = {
+  amount: amount,
   currency: "XAF",
   description: `Purchase of plan ${planId}`,
-  merchant_reference: merchantReference,
-  email: email,
-  callback: "https://dpaybackend.onrender.com/api/payments/verify",
-
-  // IMPORTANT: send user id
+  callback: "https://dpaybackend.onrender.com/api/notchpay/webhook",
   metadata: {
-    userId: String(userId),
-    planId: String(planId)
+    merchant_reference: merchantReference
   }
 };
 
@@ -817,152 +814,71 @@ app.get("/api/payments/check/:reference", async (req, res) => {
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
 app.post("/api/notchpay/webhook", async (req, res) => {
-
   try {
-
     console.log("🔔 NotchPay callback received:", req.body);
 
     const payment = req.body.data;
-    const amount = payment.amount;
-    
+
     if (!payment) {
-      return res.status(400).json({ message: "Invalid webhook payload" });
+      return res.status(400).json({ message: "Invalid payload" });
     }
 
-    // Only process successful payments
+    // Only process completed payments
     if (payment.status !== "complete") {
       console.log("Ignoring payment with status:", payment.status);
-      return res.status(200).send("Ignored");
+      return res.sendStatus(200);
     }
 
- const reference = payment.reference;
-const merchantRef = payment.merchant_reference;
-    
-let planId = payment.metadata?.planId;
-if (!planId) {
-  planId = pendingPayment.plan_id;
-}
-   
-      // 🔐 VERIFY PAYMENT WITH NOTCHPAY
-    const verifyResponse = await axios.get(
-      `https://api.notchpay.co/payments/${reference}`,
-      {
-        headers: {
-           Authorization: process.env.NOTCHPAY_API_KEY
-        }
-      }
-    );
+    // ✅ GET YOUR INTERNAL REFERENCE
+    const merchantRef = payment.metadata?.merchant_reference;
 
-   const verifiedPayment = verifyResponse.data?.transaction;
-
-if (!verifiedPayment || verifiedPayment.status !== "complete") {
-      console.log("❌ Payment verification failed:", verifiedPayment);
-      return res.status(400).json({
-        message: "Payment verification failed"
-      });
+    if (!merchantRef) {
+      console.error("❌ Missing merchant_reference in metadata");
+      return res.status(400).json({ message: "Missing metadata" });
     }
 
-    console.log("✅ Payment verified with NotchPay:", reference);
-    // Extract planId from merchant reference
-
-    // Prevent duplicate processing
-    const { data: existing } = await supabase
-      .from("transactions")
+    // ✅ FETCH PAYMENT FIRST (fixes your crash)
+    const { data: pendingPayment, error } = await supabase
+      .from("pending_payments")
       .select("*")
-      .eq("payment_reference", reference)
-      .maybeSingle();
-
-    if (existing) {
-      console.log("⚠ Transaction already processed:", reference);
-      return res.json({
-        success: true,
-        message: "Transaction already processed"
-      });
-    }
-
-    // Find user using stored merchant reference
-    const { data: pendingPayment } = await supabase
-  .from("transactions")
-  .select("*")
-  .eq("merchant_reference", merchantRef)
-  .maybeSingle();
-
-    if (!pendingPayment) {
-      console.error("User not found for merchant reference:", merchantRef);
-      return res.status(404).json({
-        message: "Pending payment record not found"
-      });
-    }
-
-    const userId = pendingPayment.user_id;
-
-    // Fetch user
-    const { data: user, error: userError } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", userId)
+      .eq("merchant_reference", merchantRef)
       .single();
 
-    if (userError || !user) {
-      console.error("User not found:", userId);
-      return res.status(404).json({
-        message: "User not found"
-      });
+    if (error || !pendingPayment) {
+      console.error("❌ Pending payment not found:", merchantRef);
+      return res.status(404).json({ message: "Pending payment not found" });
     }
 
-    const newTotalDeposited = (user.total_deposited || 0) + amount;
+    // ✅ PREVENT DOUBLE PROCESSING
+    if (pendingPayment.status === "completed") {
+      console.log("⚠️ Payment already processed:", merchantRef);
+      return res.sendStatus(200);
+    }
 
-    // Update user plan
-    const { error: updateError } = await supabase
+    // ✅ UPDATE PAYMENT STATUS
+    await supabase
+      .from("pending_payments")
+      .update({
+        status: "completed",
+        notchpay_reference: payment.reference
+      })
+      .eq("merchant_reference", merchantRef);
+
+    // ✅ UPDATE USER PLAN
+    await supabase
       .from("users")
       .update({
-        active_plan: planId,
-        total_deposited: newTotalDeposited,
-        last_transaction_date: new Date(),
-        withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        plan: pendingPayment.plan_id
       })
-      .eq("id", userId);
+      .eq("email", pendingPayment.user_email);
 
-    if (updateError) {
-      console.error("User update error:", updateError);
-      return res.status(500).json({
-        message: "Failed to update user"
-      });
-    }
+    console.log("✅ Payment processed successfully for:", merchantRef);
 
-    // Save transaction
-    const { error: insertError } = await supabase
-  .from("transactions")
- .insert({
-  user_id: userId,
-  type: "plan_purchase",
-  description: `Purchase of plan ${planId}`,
-  amount: amount,
-  status: "completed",
-  merchant_reference: merchantRef,
-  payment_reference: reference,
-  created_at: new Date()
-});
-
-    if (insertError) {
-      console.error("Transaction insert error:", insertError);
-    }
-
-    console.log("✅ Payment processed and plan activated:", userId, planId);
-
-    return res.json({
-      success: true,
-      message: "Payment processed successfully"
-    });
+    res.sendStatus(200);
 
   } catch (err) {
-
     console.error("❌ Webhook processing error:", err);
-
-    return res.status(500).json({
-      message: "Webhook processing error"
-    });
-
+    res.sendStatus(500);
   }
 });
 
