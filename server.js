@@ -903,14 +903,6 @@ const userId = user.id;
 
     console.log("✅ Payment verified with NotchPay:", reference);
     // Extract planId from merchant reference
-    const parts = merchantRef.split("_");
-    const planId = parts[1];
-
-    if (!planId) {
-      return res.status(400).json({
-        message: "Invalid merchant reference"
-      });
-    }
 
     // Prevent duplicate processing
     const { data: existing } = await supabase
