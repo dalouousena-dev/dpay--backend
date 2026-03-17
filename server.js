@@ -613,7 +613,12 @@ app.post("/api/plans/purchase", async (req, res) => {
       data?.transaction?.reference ||
       data?.reference ||
       merchantReference;
-
+await supabase
+  .from("pending_payments")
+  .update({
+    notchpay_reference: reference
+  })
+  .eq("merchant_reference", merchantReference);
     return res.json({
       success: true,
       paymentUrl,
@@ -787,13 +792,14 @@ app.post("/api/notchpay/webhook", async (req, res) => {
     }
 
     // ✅ SAFE METADATA EXTRACTION
-    const metadata = payment.metadata || {};
-    const merchantRef = metadata.merchant_reference;
+   const notchpayRef = payment.reference;
 
-    if (!merchantRef) {
-      console.error("❌ Missing merchant_reference in metadata");
-      return res.status(400).json({ message: "Missing metadata" });
-    }
+if (!notchpayRef) {
+  console.error("❌ Missing payment reference");
+  return res.sendStatus(400);
+}
+
+console.log("🔎 Processing reference:", notchpayRef);
 
     console.log("🔎 Processing merchantRef:", merchantRef);
 
@@ -801,7 +807,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
     const { data: pendingPayment, error } = await supabase
       .from("pending_payments")
       .select("*")
-      .eq("merchant_reference", merchantRef)
+      .eq("notchpay_reference", notchpayRef)
       .single();
 
     if (error || !pendingPayment) {
