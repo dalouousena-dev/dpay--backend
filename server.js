@@ -1325,12 +1325,13 @@ app.get('/api/admin/pending-withdrawals', async (req, res) => {
 app.post('/api/admin/approve-withdrawal', async (req, res) => {
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
+
   if (token !== adminToken) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
 
   const { requestId } = req.body;
-  
+
   try {
     if (supabase) {
       // Get withdrawal request
@@ -1339,60 +1340,77 @@ app.post('/api/admin/approve-withdrawal', async (req, res) => {
         .select('*')
         .eq('id', requestId)
         .single();
-      
+
       if (wError || !withdrawal) {
         return res.status(404).json({ message: 'Withdrawal request not found' });
       }
-      
+
       if (withdrawal.status !== 'pending') {
         return res.status(400).json({ message: 'Withdrawal already processed' });
       }
-      
+
       // Deduct from user wallet
       const { data: user } = await supabase
         .from('users')
-        .select('walletBalance')
+        .select('wallet_balance') // ✅ FIX column name
         .eq('id', withdrawal.userId)
         .single();
-      
+
       if (user) {
-        const newBalance = (user.walletBalance || 0) - withdrawal.amount;
+        const newBalance = (user.wallet_balance || 0) - withdrawal.amount;
+
         await supabase
           .from('users')
-          .update({ walletBalance: newBalance })
+          .update({ wallet_balance: newBalance }) // ✅ FIX column name
           .eq('id', withdrawal.userId);
       }
-      
+
       // Update withdrawal status
       const { data: updated, error: uError } = await supabase
         .from('withdrawal_requests')
-        .update({ status: 'approved', approvedAt: new Date().toISOString() })
+        .update({
+          status: 'approved',
+          approvedAt: new Date().toISOString()
+        })
         .eq('id', requestId)
         .select()
         .single();
-      
+
       if (uError) throw uError;
-      
+
       console.log(`Withdrawal approved: ${requestId}`);
-      return res.json({ 
+
+      return res.json({
         message: 'Withdrawal approved successfully',
         withdrawal: updated
       });
+
     } else {
       // Fallback to in-memory storage
       const withdrawal = pendingWithdrawals.find(w => w.id === requestId);
-      if (!withdrawal) return res.status(404).json({ message: 'Withdrawal request not found' });
-      if (withdrawal.status !== 'pending') return res.status(400).json({ message: 'Withdrawal already processed' });
+
+      if (!withdrawal) {
+        return res.status(404).json({ message: 'Withdrawal request not found' });
       }
-      
+
+      if (withdrawal.status !== 'pending') {
+        return res.status(400).json({ message: 'Withdrawal already processed' });
+      }
+
       withdrawal.status = 'approved';
       withdrawal.approvedAt = new Date().toISOString();
+
       console.log(`Withdrawal approved: ${requestId}`);
-      return res.json({ message: 'Withdrawal approved successfully', withdrawal });
+
+      return res.json({
+        message: 'Withdrawal approved successfully',
+        withdrawal
+      });
     }
+
   } catch (err) {
-    console.error('Error approving withdrawal:', err);
-    res.status(500).json({ message: 'Failed to approve withdrawal' });
+    console.error('❌ Error approving withdrawal:', err);
+    return res.status(500).json({ message: 'Failed to approve withdrawal' });
   }
 });
 
