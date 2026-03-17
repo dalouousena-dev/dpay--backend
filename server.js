@@ -948,47 +948,65 @@ app.get('/api/notifications', (req, res) => {
   res.json({ notifications: user.notifications || [] });
 });
 
-// Background job to notify users when withdrawal becomes available
+
+// 🔵 BACKGROUND JOB 1: Withdrawal notifications (runs every minute)
 setInterval(() => {
   const now = new Date();
   let changed = false;
+
   users.forEach(u => {
     if (u.withdrawalAvailableAt && !u.notifiedWithdrawal) {
       const when = new Date(u.withdrawalAvailableAt);
+
       if (when <= now) {
         u.notifications = u.notifications || [];
+
         const note = {
           id: crypto.randomBytes(8).toString('hex'),
           type: 'withdrawal_available',
           message: 'Your withdrawal is now available.',
           at: now.toISOString(),
         };
+
         u.notifications.push(note);
         u.notifiedWithdrawal = true;
         changed = true;
-        // placeholder for real email sending
+
         console.log(`Notify user ${u.email}: withdrawal available`);
       }
     }
   });
 
-// Background job for daily referral earnings - runs every 24 hours
+  if (changed) saveUsers();
+
+}, 60 * 1000); // ✅ CLOSED
+
+
+// 🔵 BACKGROUND JOB 2: Daily referral earnings (runs every 24h)
 setInterval(() => {
   const now = new Date();
   let changed = false;
-  
+
   users.forEach(u => {
     const referralCount = u.referral_count || 0;
+
     if (referralCount > 0) {
       const tier = getCommissionTier(referralCount);
-      const lastEarningsCredit = u.lastEarningsCredit ? new Date(u.lastEarningsCredit) : null;
-      const daysPassed = lastEarningsCredit ? Math.floor((now - lastEarningsCredit) / (1000 * 60 * 60 * 24)) : 1;
-      
-      // Credit daily earnings if at least 1 day has passed
+
+      const lastEarningsCredit = u.lastEarningsCredit
+        ? new Date(u.lastEarningsCredit)
+        : null;
+
+      const daysPassed = lastEarningsCredit
+        ? Math.floor((now - lastEarningsCredit) / (1000 * 60 * 60 * 24))
+        : 1;
+
       if (daysPassed >= 1 && tier.daily > 0) {
-        const earningsAmount = Math.floor(tier.daily * daysPassed); // Allow multiple days of earnings if interval was missed
+        const earningsAmount = Math.floor(tier.daily * daysPassed);
+
         u.wallet_balance = (u.wallet_balance || 0) + earningsAmount;
         u.lastEarningsCredit = now.toISOString();
+
         u.transactions = u.transactions || [];
         u.transactions.push({
           id: crypto.randomBytes(8).toString('hex'),
@@ -996,13 +1014,23 @@ setInterval(() => {
           amount: earningsAmount,
           at: now.toISOString()
         });
+
         changed = true;
-        console.log(`Credited ${earningsAmount} FCFA daily earnings to user ${u.email} (Tier: ${tier.commission}, Referrals: ${referralCount})`);
+
+        console.log(
+          `Credited ${earningsAmount} FCFA to ${u.email} (Tier: ${tier.commission})`
+        );
       }
     }
   });
-  
-// replicate frontend PRODUCTS for server-side validation
+
+  if (changed) saveUsers();
+
+}, 24 * 60 * 60 * 1000); // ✅ CLOSED
+
+
+
+// 🔵 PRODUCTS (OUTSIDE of intervals — this was wrongly nested before)
 const PRODUCTS = [
   { id: 1, name: '📱 Smartphone', price: 5000, minVip: null },
   { id: 2, name: '🎧 Headphones', price: 2000, minVip: null },
@@ -1026,16 +1054,15 @@ function vipLevel(planId) {
   return isNaN(n) ? 0 : n;
 }
 
-// Get VIP benefits (purchase discount and sell bonus) based on active plan
 function getVipBenefits(planId) {
   const level = vipLevel(planId);
   const benefits = {
-    0: { purchaseDiscount: 0, sellBonus: 0 },      // No plan
-    1: { purchaseDiscount: 0.05, sellBonus: 0.02 }, // VIP1: 5% discount, 2% bonus
-    2: { purchaseDiscount: 0.10, sellBonus: 0.05 }, // VIP2: 10% discount, 5% bonus
-    3: { purchaseDiscount: 0.15, sellBonus: 0.08 }, // VIP3: 15% discount, 8% bonus
-    4: { purchaseDiscount: 0.20, sellBonus: 0.10 }, // VIP4: 20% discount, 10% bonus
-    5: { purchaseDiscount: 0.25, sellBonus: 0.15 }  // VIP5: 25% discount, 15% bonus
+    0: { purchaseDiscount: 0, sellBonus: 0 },
+    1: { purchaseDiscount: 0.05, sellBonus: 0.02 },
+    2: { purchaseDiscount: 0.10, sellBonus: 0.05 },
+    3: { purchaseDiscount: 0.15, sellBonus: 0.08 },
+    4: { purchaseDiscount: 0.20, sellBonus: 0.10 },
+    5: { purchaseDiscount: 0.25, sellBonus: 0.15 }
   };
   return benefits[level] || benefits[0];
 }
