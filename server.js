@@ -880,7 +880,6 @@ if (userError || !user) {
   });
 }
 
-const userId = user.id;
     
       // 🔐 VERIFY PAYMENT WITH NOTCHPAY
     const verifyResponse = await axios.get(
