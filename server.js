@@ -861,7 +861,26 @@ app.post("/api/notchpay/webhook", async (req, res) => {
         message: "Missing payment reference"
       });
     }
+      // 🔐 VERIFY PAYMENT WITH NOTCHPAY
+    const verifyResponse = await axios.get(
+      `https://api.notchpay.co/payments/${reference}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`
+        }
+      }
+    );
 
+    const verifiedPayment = verifyResponse.data;
+
+    if (!verifiedPayment || verifiedPayment.status !== "complete") {
+      console.log("❌ Payment verification failed:", verifiedPayment);
+      return res.status(400).json({
+        message: "Payment verification failed"
+      });
+    }
+
+    console.log("✅ Payment verified with NotchPay:", reference);
     // Extract planId from merchant reference
     const parts = merchantRef.split("_");
     const planId = parts[1];
@@ -876,7 +895,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
     const { data: existing } = await supabase
       .from("transactions")
       .select("*")
-      .eq("reference", reference)
+      .eq("merchant_reference", merchantRef)
       .maybeSingle();
 
     if (existing) {
@@ -889,10 +908,10 @@ app.post("/api/notchpay/webhook", async (req, res) => {
 
     // Find user using stored merchant reference
     const { data: pendingPayment } = await supabase
-      .from("pending_payments")
-      .select("*")
-      .eq("merchant_reference", merchantRef)
-      .maybeSingle();
+  .from("transactions")
+  .select("*")
+  .eq("merchant_reference", merchantRef)
+  .maybeSingle();
 
     if (!pendingPayment) {
       console.error("User not found for merchant reference:", merchantRef);
@@ -939,15 +958,15 @@ app.post("/api/notchpay/webhook", async (req, res) => {
 
     // Save transaction
     const { error: insertError } = await supabase
-      .from("transactions")
-      .insert({
-        user_id: userId,
-        type: "plan_purchase",
-        description: `Purchase of plan ${planId}`,
-        amount: amount,
-        status: "completed",
-        reference: reference,
-        at: new Date()
+  .from("transactions")
+  .insert({
+  user_id: userId,
+  type: "plan_purchase",
+  description: `Purchase of plan ${planId}`,
+  amount: amount,
+  status: "completed",
+  merchant_reference: merchantRef,
+  created_at: new Date()
       });
 
     if (insertError) {
