@@ -861,7 +861,6 @@ if (!reference || !planId || !email) {
     message: "Missing required payment data"
   });
 }
-}
    
       // 🔐 VERIFY PAYMENT WITH NOTCHPAY
     const verifyResponse = await axios.get(
