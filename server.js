@@ -685,12 +685,12 @@ app.get("/api/payments/verify", (req, res) => {
 
   console.log("🔁 NotchPay redirect received:", req.query);
 
-  // simply redirect user back to dashboard
   return res.redirect(
     "https://computerarchi.com/Dpay/dashboard?notchpay_status=success"
   );
 
 });
+
 
 app.get("/api/payments/check/:reference", async (req, res) => {
   try {
@@ -701,18 +701,18 @@ app.get("/api/payments/check/:reference", async (req, res) => {
       return res.status(400).json({ message: "Missing reference" });
     }
 
-const apiKey = process.env.NOTCHPAY_API_KEY;
+    const apiKey = process.env.NOTCHPAY_API_KEY;
 
-const baseURL = apiKey.startsWith("sk_test")
-  ? "https://apisandbox.notchpay.co"
-  : "https://api.notchpay.co";
+    const baseURL = apiKey.startsWith("sk_test")
+      ? "https://apisandbox.notchpay.co"
+      : "https://api.notchpay.co";
 
-const endpoint = `${baseURL}/payments/${reference}`;
+    const endpoint = `${baseURL}/payments/${reference}`;
 
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
       headers: {
-       Authorization: process.env.NOTCHPAY_API_KEY,
+        Authorization: apiKey,
         "Content-Type": "application/json"
       }
     });
@@ -733,7 +733,7 @@ const endpoint = `${baseURL}/payments/${reference}`;
       return res.status(400).json({ message: "Transaction missing" });
     }
 
-    // If payment not finished yet
+    // payment not finished yet
     if (!["complete", "completed", "success"].includes(transaction.status)) {
       return res.json({ status: transaction.status });
     }
@@ -743,63 +743,66 @@ const endpoint = `${baseURL}/payments/${reference}`;
     const email =
       transaction.customer_email ||
       transaction.customer?.email ||
+      transaction.metadata?.email ||
       null;
 
-    if (!email) {
-      return res.status(400).json({ message: "Customer email missing" });
+    const planId = transaction.metadata?.planId;
+
+    if (!email || !planId) {
+      return res.status(400).json({ message: "Missing payment metadata" });
     }
 
-    // Extract planId from reference
-    let planId = null;
-
-    if (transaction.reference) {
-      const parts = transaction.reference.split("_");
-      planId = parts.length >= 2 ? parts[1] : null;
-    }
-
-    if (!planId) {
-      return res.status(400).json({ message: "Plan ID missing in reference" });
-    }
-
-    // Prevent duplicate transaction processing
+    // prevent duplicate processing
     const { data: existing } = await supabase
       .from("transactions")
       .select("*")
       .eq("reference", transaction.reference)
       .maybeSingle();
 
-      if (userError || !user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      const newTotalDeposited = (user.total_deposited || 0) + amount;
-      const newWalletBalance = (user.wallet_balance || 0) + amount;
-
-      await supabase
-        .from("users")
-        .update({
-          active_plan: planId,
-         wallet_balance: newWalletBalance,
-         total_deposited: newTotalDeposited,
-          withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        })
-        .eq("email", email);
-
-      await supabase
-        .from("transactions")
-        .insert({
-          user_email: email,
-          type: "plan_purchase",
-          description: `Purchase of plan ${planId}`,
-          amount: amount,
-          status: "completed",
-          reference: transaction.reference,
-          at: new Date()
-        });
-
-      console.log("✅ Plan activated via polling:", email, planId);
-
+    if (existing) {
+      return res.json({
+        status: "complete",
+        reference: transaction.reference
+      });
     }
+
+    // fetch user
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .single();
+
+    if (userError || !user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const newTotalDeposited = (user.total_deposited || 0) + amount;
+    const newWalletBalance = (user.wallet_balance || 0) + amount;
+
+    await supabase
+      .from("users")
+      .update({
+        active_plan: planId,
+        wallet_balance: newWalletBalance,
+        total_deposited: newTotalDeposited,
+        withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      })
+      .eq("email", email);
+
+    await supabase
+      .from("transactions")
+      .insert({
+        user_email: email,
+        type: "plan_purchase",
+        description: `Purchase of plan ${planId}`,
+        amount: amount,
+        status: "completed",
+        reference: transaction.reference,
+        at: new Date()
+      });
+
+    console.log("✅ Plan activated via polling:", email, planId);
 
     return res.json({
       status: "complete",
