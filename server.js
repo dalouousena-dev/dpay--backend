@@ -599,7 +599,7 @@ app.post("/api/plans/purchase", async (req, res) => {
 
 const merchantReference = `plan_${planId}_${Date.now()}`;
     await supabase 
-      .from("pending_payments") 
+      .from("transactions") 
       .insert({ 
         merchant_reference: merchantReference, 
         user_email: email, plan_id: planId, 
@@ -609,7 +609,7 @@ const merchantReference = `plan_${planId}_${Date.now()}`;
       amount: Number(amount), 
     currency: "XAF", 
     description: `Purchase of plan ${planId}`,
-    reference: merchantReference, 
+   merchant_reference: merchantReference
       email: email, 
       callback: "https://dpaybackend.onrender.com/api/payments/verify", 
       metadata: { 
