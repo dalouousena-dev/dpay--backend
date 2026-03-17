@@ -609,7 +609,7 @@ const merchantReference = `plan_${planId}_${Date.now()}`;
       amount: Number(amount), 
     currency: "XAF", 
     description: `Purchase of plan ${planId}`,
-   merchant_reference: merchantReference
+   merchant_reference: merchantReference,
       email: email, 
       callback: "https://dpaybackend.onrender.com/api/payments/verify", 
       metadata: { 
