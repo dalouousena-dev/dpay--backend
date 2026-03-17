@@ -748,8 +748,6 @@ app.get("/api/payments/check/:reference", async (req, res) => {
       transaction.metadata?.email ||
       null;
 
-    const planId = transaction.metadata?.planId;
-
     if (!email || !planId) {
       return res.status(400).json({ message: "Missing payment metadata" });
     }
@@ -851,8 +849,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
 
  const reference = payment.reference;
 const merchantRef = payment.merchant_reference;
-
-const userId = payment.metadata?.userId;
+    
 const planId = payment.metadata?.planId;
 
 if (!userId || !planId) {
