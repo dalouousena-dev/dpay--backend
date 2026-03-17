@@ -769,29 +769,42 @@ app.get("/api/payments/check/:reference", async (req, res) => {
 
 app.post("/api/notchpay/webhook", async (req, res) => {
   try {
-    console.log("🔔 NotchPay callback received:", req.body);
+    console.log("🔔 NotchPay callback received:", JSON.stringify(req.body, null, 2));
 
+    const event = req.body.event;
     const payment = req.body.data;
 
     if (!payment) {
+      console.error("❌ Missing payment data");
       return res.status(400).json({ message: "Invalid payload" });
     }
 
-    // Only process completed payments
-    if (payment.status !== "complete") {
-      console.log("Ignoring payment with status:", payment.status);
+    // ✅ STRICT EVENT FILTERING
+    if (!event || !event.includes("payment")) {
+      console.log("⏭ Ignored non-payment event:", event);
       return res.sendStatus(200);
     }
 
-    // ✅ GET YOUR INTERNAL REFERENCE
-    const merchantRef = payment.metadata?.merchant_reference;
+    // ✅ STRICT STATUS CHECK
+    const validStatuses = ["complete", "completed", "success"];
+
+    if (!validStatuses.includes(payment.status)) {
+      console.log("⏭ Ignored payment with status:", payment.status);
+      return res.sendStatus(200);
+    }
+
+    // ✅ SAFE METADATA EXTRACTION
+    const metadata = payment.metadata || {};
+    const merchantRef = metadata.merchant_reference;
 
     if (!merchantRef) {
       console.error("❌ Missing merchant_reference in metadata");
       return res.status(400).json({ message: "Missing metadata" });
     }
 
-    // ✅ FETCH PAYMENT FIRST (fixes your crash)
+    console.log("🔎 Processing merchantRef:", merchantRef);
+
+    // ✅ FETCH PENDING PAYMENT
     const { data: pendingPayment, error } = await supabase
       .from("pending_payments")
       .select("*")
@@ -803,36 +816,51 @@ app.post("/api/notchpay/webhook", async (req, res) => {
       return res.status(404).json({ message: "Pending payment not found" });
     }
 
-    // ✅ PREVENT DOUBLE PROCESSING
+    // ✅ IDEMPOTENCY CHECK (CRITICAL)
     if (pendingPayment.status === "completed") {
-      console.log("⚠️ Payment already processed:", merchantRef);
+      console.log("⚠️ Already processed:", merchantRef);
       return res.sendStatus(200);
     }
 
-    // ✅ UPDATE PAYMENT STATUS
-    await supabase
+    // ✅ UPDATE PAYMENT FIRST
+    const { error: updateError } = await supabase
       .from("pending_payments")
       .update({
         status: "completed",
-        notchpay_reference: payment.reference
+        notchpay_reference: payment.reference,
+        completed_at: new Date().toISOString()
       })
       .eq("merchant_reference", merchantRef);
 
-    // ✅ UPDATE USER PLAN
-    await supabase
+    if (updateError) {
+      console.error("❌ Failed to update pending payment:", updateError);
+      return res.sendStatus(500);
+    }
+
+    // ✅ UPDATE USER
+    const { error: userError } = await supabase
       .from("users")
-     .update({
-  active_plan: pendingPayment.plan_id
-})
+      .update({
+        active_plan: pendingPayment.plan_id
+      })
       .eq("email", pendingPayment.user_email);
 
-    console.log("✅ Payment processed successfully for:", merchantRef);
+    if (userError) {
+      console.error("❌ Failed to update user:", userError);
+      return res.sendStatus(500);
+    }
 
-    res.sendStatus(200);
+    console.log("✅ Payment fully processed:", {
+      merchantRef,
+      email: pendingPayment.user_email,
+      plan: pendingPayment.plan_id
+    });
+
+    return res.sendStatus(200);
 
   } catch (err) {
-    console.error("❌ Webhook processing error:", err);
-    res.sendStatus(500);
+    console.error("🔥 Webhook crash:", err);
+    return res.sendStatus(500);
   }
 });
 
