@@ -595,7 +595,8 @@ try {
   return res.status(500).json({
     message: "Invalid response from payment provider"
   });
-} const data = await response.json();
+}
+   
 
     console.log("NOTCHPAY INIT RESPONSE:", JSON.stringify(data, null, 2));
 
