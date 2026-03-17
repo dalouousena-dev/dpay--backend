@@ -554,14 +554,21 @@ await supabase.from("pending_payments").insert({
   status: "pending"
 });
 
-
+if (!email) {
+  throw new Error("Payment blocked: missing email");
+}
 const paymentData = {
   amount: amount,
   currency: "XAF",
   description: `Purchase of plan ${planId}`,
   callback: "https://dpaybackend.onrender.com/api/notchpay/webhook",
+
+  email: email, // ✅ THIS LINE FIXES YOUR ERROR
+
   metadata: {
-    merchant_reference: merchantReference
+    merchant_reference: merchantReference,
+    email: email,          // (optional but smart)
+    planId: planId         // 🔴 you forgot this too (breaks verification later)
   }
 };
 
@@ -569,14 +576,12 @@ const paymentData = {
   ? "https://apisandbox.notchpay.co"
   : "https://api.notchpay.co";
 
-const response = await fetch(`${baseURL}/payments`, {
-      method: "POST",
-      headers: {
-      Authorization: apiKey,
-        "Content-Type": "application/json"
-      },
-     body: JSON.stringify(paymentData)
-    });
+const response = await axios.post(`${baseURL}/payments`, paymentData, {
+  headers: {
+    Authorization: apiKey,
+    "Content-Type": "application/json"
+  }
+});
 
     const data = await response.json();
 
@@ -695,12 +700,6 @@ app.get("/api/payments/check/:reference", async (req, res) => {
       transaction.customer?.email ||
       transaction.metadata?.email ||
       null;
-
-    const planId = transaction.metadata?.planId;
-
-    if (!email || !planId) {
-      return res.status(400).json({ message: "Missing payment metadata" });
-    }
 
     // ✅ Fetch user correctly
     const { data: user, error: userError } = await supabase
