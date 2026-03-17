@@ -645,7 +645,6 @@ app.get("/api/payments/verify", (req, res) => {
 
 app.get("/api/payments/check/:reference", async (req, res) => {
   try {
-
     const { reference } = req.params;
 
     if (!reference) {
@@ -684,7 +683,7 @@ app.get("/api/payments/check/:reference", async (req, res) => {
       return res.status(400).json({ message: "Transaction missing" });
     }
 
-    // payment not finished yet
+    // Not completed yet
     if (!["complete", "completed", "success"].includes(transaction.status)) {
       return res.json({ status: transaction.status });
     }
@@ -697,15 +696,17 @@ app.get("/api/payments/check/:reference", async (req, res) => {
       transaction.metadata?.email ||
       null;
 
+    const planId = transaction.metadata?.planId;
+
     if (!email || !planId) {
       return res.status(400).json({ message: "Missing payment metadata" });
     }
 
-    // fetch user
+    // ✅ Fetch user correctly
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
-      .eq("merchant_reference", merchantRef)
+      .eq("email", email)
       .single();
 
     if (userError || !user) {
@@ -715,16 +716,20 @@ app.get("/api/payments/check/:reference", async (req, res) => {
     const newTotalDeposited = (user.total_deposited || 0) + amount;
     const newWalletBalance = (user.wallet_balance || 0) + amount;
 
-   await supabase
-  .from("users")
-  .update({
-    active_plan: transaction.metadata?.planId,
-    wallet_balance: newWalletBalance,
-    total_deposited: newTotalDeposited,
-    withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-  })
-  .eq("email", email);
+    // ✅ Update user
+    await supabase
+      .from("users")
+      .update({
+        active_plan: planId,
+        wallet_balance: newWalletBalance,
+        total_deposited: newTotalDeposited,
+        withdrawal_available_at: new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000
+        )
+      })
+      .eq("email", email);
 
+    // ✅ Log transaction
     await supabase
       .from("transactions")
       .insert({
@@ -745,13 +750,11 @@ app.get("/api/payments/check/:reference", async (req, res) => {
     });
 
   } catch (err) {
-
-    console.error("Payment polling error:", err);
+    console.error("❌ Payment polling error:", err);
 
     return res.status(500).json({
       message: "Verification error"
     });
-
   }
 });
 
