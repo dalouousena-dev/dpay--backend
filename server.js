@@ -852,16 +852,36 @@ app.post("/api/notchpay/webhook", async (req, res) => {
       return res.status(200).send("Ignored");
     }
 
-    const reference = payment.reference;
-  
-    const merchantRef = payment.merchant_reference;
-    const amount = Number(payment.amount);
+ const reference = payment.reference;
+const merchantRef = payment.merchant_reference;
 
-    if (!reference || !merchantRef) {
-      return res.status(400).json({
-        message: "Missing payment reference"
-      });
-    }
+const planId =
+  merchantRef?.split("_")[1] || payment.metadata?.planId;
+
+const email =
+  payment.metadata?.email;
+
+if (!reference || !planId || !email) {
+  return res.status(400).json({
+    message: "Missing required payment data"
+  });
+}
+// 🔎 FIND USER BY EMAIL
+const { data: user, error: userError } = await supabase
+  .from("users")
+  .select("*")
+  .eq("email", email)
+  .single();
+
+if (userError || !user) {
+  console.error("User not found:", email);
+  return res.status(404).json({
+    message: "User not found"
+  });
+}
+
+const userId = user.id;
+    
       // 🔐 VERIFY PAYMENT WITH NOTCHPAY
     const verifyResponse = await axios.get(
       `https://api.notchpay.co/payments/${reference}`,
