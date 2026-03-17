@@ -752,20 +752,6 @@ app.get("/api/payments/check/:reference", async (req, res) => {
       return res.status(400).json({ message: "Missing payment metadata" });
     }
 
-    // prevent duplicate processing
-    const { data: existing } = await supabase
-      .from("transactions")
-      .select("*")
-      .eq("reference", transaction.reference)
-      .maybeSingle();
-
-    if (existing) {
-      return res.json({
-        status: "complete",
-        reference: transaction.reference
-      });
-    }
-
     // fetch user
     const { data: user, error: userError } = await supabase
       .from("users")
@@ -831,12 +817,14 @@ app.get("/api/payments/check/:reference", async (req, res) => {
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
 app.post("/api/notchpay/webhook", async (req, res) => {
+
   try {
 
     console.log("🔔 NotchPay callback received:", req.body);
 
     const payment = req.body.data;
-
+    const amount = payment.amount;
+    
     if (!payment) {
       return res.status(400).json({ message: "Invalid webhook payload" });
     }
@@ -850,8 +838,10 @@ app.post("/api/notchpay/webhook", async (req, res) => {
  const reference = payment.reference;
 const merchantRef = payment.merchant_reference;
     
-const planId = payment.metadata?.planId;
-
+let planId = payment.metadata?.planId;
+if (!planId) {
+  planId = pendingPayment.plan_id;
+}
    
       // 🔐 VERIFY PAYMENT WITH NOTCHPAY
     const verifyResponse = await axios.get(
@@ -863,9 +853,9 @@ const planId = payment.metadata?.planId;
       }
     );
 
-    const verifiedPayment = verifyResponse.data;
+   const verifiedPayment = verifyResponse.data?.transaction;
 
-    if (!verifiedPayment || verifiedPayment.status !== "complete") {
+if (!verifiedPayment || verifiedPayment.status !== "complete") {
       console.log("❌ Payment verification failed:", verifiedPayment);
       return res.status(400).json({
         message: "Payment verification failed"
@@ -879,7 +869,7 @@ const planId = payment.metadata?.planId;
     const { data: existing } = await supabase
       .from("transactions")
       .select("*")
-      .eq("merchant_reference", merchantRef)
+      .eq("payment_reference", reference)
       .maybeSingle();
 
     if (existing) {
@@ -943,15 +933,16 @@ const planId = payment.metadata?.planId;
     // Save transaction
     const { error: insertError } = await supabase
   .from("transactions")
-  .insert({
+ .insert({
   user_id: userId,
   type: "plan_purchase",
   description: `Purchase of plan ${planId}`,
   amount: amount,
   status: "completed",
   merchant_reference: merchantRef,
+  payment_reference: reference,
   created_at: new Date()
-      });
+});
 
     if (insertError) {
       console.error("Transaction insert error:", insertError);
