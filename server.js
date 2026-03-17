@@ -576,14 +576,26 @@ const paymentData = {
   ? "https://apisandbox.notchpay.co"
   : "https://api.notchpay.co";
 
-const response = await axios.post(`${baseURL}/payments`, paymentData, {
+const response = await fetch(`${baseURL}/payments`, {
+  method: "POST",
   headers: {
     Authorization: apiKey,
     "Content-Type": "application/json"
-  }
+  },
+  body: JSON.stringify(paymentData)
 });
 
-    const data = await response.json();
+    let data;
+
+try {
+  data = await response.json();
+} catch (err) {
+  console.error("❌ Failed to parse NotchPay response:", err);
+
+  return res.status(500).json({
+    message: "Invalid response from payment provider"
+  });
+} const data = await response.json();
 
     console.log("NOTCHPAY INIT RESPONSE:", JSON.stringify(data, null, 2));
 
@@ -594,21 +606,18 @@ const response = await axios.post(`${baseURL}/payments`, paymentData, {
       });
     }
 
-  const paymentUrl =
+const paymentUrl =
   data?.authorization_url ||
   data?.data?.authorization_url ||
+  data?.payment_url ||
+  data?.data?.payment_url ||
   data?.checkout_url ||
   data?.data?.checkout_url;
 
-const reference =
-  data?.reference ||
-  data?.trxref ||
-  data?.merchant_reference ||
-  merchantReference;
-
 if (!paymentUrl) {
+  console.error("❌ No payment URL found. Full response:", data);
   return res.status(500).json({
-    message: "Payment URL not received from NotchPay",
+    message: "Payment URL missing from NotchPay response",
     notchpay_response: data
   });
 }
