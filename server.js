@@ -853,6 +853,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
     }
 
     const reference = payment.reference;
+  
     const merchantRef = payment.merchant_reference;
     const amount = Number(payment.amount);
 
@@ -866,7 +867,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
       `https://api.notchpay.co/payments/${reference}`,
       {
         headers: {
-          Authorization: `Bearer ${process.env.NOTCHPAY_API_KEY}`
+           Authorization: process.env.NOTCHPAY_API_KEY
         }
       }
     );
