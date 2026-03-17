@@ -605,18 +605,20 @@ const merchantReference = `plan_${planId}_${Date.now()}`;
         user_id: userId, 
         amount: amount, 
         created_at: new Date() }); 
-    const payload = { 
-      amount: Number(amount), 
-    currency: "XAF", 
-    description: `Purchase of plan ${planId}`,
-   merchant_reference: merchantReference,
-      email: email, 
-      callback: "https://dpaybackend.onrender.com/api/payments/verify", 
-      metadata: { 
-      planId: String(planId), 
-        email: String(email)
-    }
-  };
+   const payload = {
+  amount: Number(amount),
+  currency: "XAF",
+  description: `Purchase of plan ${planId}`,
+  merchant_reference: merchantReference,
+  email: email,
+  callback: "https://dpaybackend.onrender.com/api/payments/verify",
+
+  // IMPORTANT: send user id
+  metadata: {
+    userId: String(userId),
+    planId: String(planId)
+  }
+};
 
     const response = await fetch("https://api.notchpay.co/payments", {
       method: "POST",
@@ -788,7 +790,7 @@ app.get("/api/payments/check/:reference", async (req, res) => {
         total_deposited: newTotalDeposited,
         withdrawal_available_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       })
-      .eq("email", email);
+        .eq("id", userId)
 
     await supabase
       .from("transactions")
@@ -850,15 +852,12 @@ app.post("/api/notchpay/webhook", async (req, res) => {
  const reference = payment.reference;
 const merchantRef = payment.merchant_reference;
 
-const planId =
-  merchantRef?.split("_")[1] || payment.metadata?.planId;
+const userId = payment.metadata?.userId;
+const planId = payment.metadata?.planId;
 
-const email =
-  payment.metadata?.email;
-
-if (!reference || !planId || !email) {
+if (!userId || !planId) {
   return res.status(400).json({
-    message: "Missing required payment data"
+    message: "Missing metadata"
   });
 }
    
