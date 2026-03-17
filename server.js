@@ -852,11 +852,6 @@ const merchantRef = payment.merchant_reference;
     
 const planId = payment.metadata?.planId;
 
-if (!userId || !planId) {
-  return res.status(400).json({
-    message: "Missing metadata"
-  });
-}
    
       // 🔐 VERIFY PAYMENT WITH NOTCHPAY
     const verifyResponse = await axios.get(
