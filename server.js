@@ -768,14 +768,6 @@ const endpoint = `${baseURL}/payments/${reference}`;
       .eq("reference", transaction.reference)
       .maybeSingle();
 
-    if (!existing) {
-
-      const { data: user, error: userError } = await supabase
-        .from("users")
-        .select("*")
-        .eq("email", email)
-        .single();
-
       if (userError || !user) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -866,21 +858,8 @@ if (!reference || !planId || !email) {
     message: "Missing required payment data"
   });
 }
-// 🔎 FIND USER BY EMAIL
-const { data: user, error: userError } = await supabase
-  .from("users")
-  .select("*")
-  .eq("email", email)
-  .single();
-
-if (userError || !user) {
-  console.error("User not found:", email);
-  return res.status(404).json({
-    message: "User not found"
-  });
 }
-
-    
+   
       // 🔐 VERIFY PAYMENT WITH NOTCHPAY
     const verifyResponse = await axios.get(
       `https://api.notchpay.co/payments/${reference}`,
