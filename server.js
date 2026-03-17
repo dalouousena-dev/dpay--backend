@@ -557,7 +557,7 @@ app.get('/api/referral/stats', async (req, res) => {
 app.post("/api/plans/purchase", async (req, res) => {
   try {
 
-  const { planId, amount } = req.body;
+  const { userId, planId, amount } = req.body;
 
     let email = req.body.email;
 
@@ -602,7 +602,7 @@ const merchantReference = `plan_${planId}_${Date.now()}`;
       .from("transactions") 
       .insert({ 
         merchant_reference: merchantReference, 
-        user_email: email, plan_id: planId, 
+        user_id: userId, 
         amount: amount, 
         created_at: new Date() }); 
     const payload = { 
@@ -770,7 +770,7 @@ app.get("/api/payments/check/:reference", async (req, res) => {
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
-      .eq("email", email)
+      .eq("merchant_reference", merchantRef)
       .single();
 
     if (userError || !user) {
