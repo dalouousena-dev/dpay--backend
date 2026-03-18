@@ -658,11 +658,16 @@ const paymentData = {
       .update({ notchpay_reference: reference })
       .eq("merchant_reference", merchantReference);
 
-    return res.json({
-      success: true,
-      paymentUrl,
-      reference
-    });
+    const redirectAfterPayment = `https://computerarchi.com/?ref=${merchantReference}`;
+
+// Force redirect param into checkout URL
+const finalPaymentUrl = `${paymentUrl}?return_url=${encodeURIComponent(redirectAfterPayment)}`;
+
+return res.json({
+  success: true,
+  paymentUrl: finalPaymentUrl,
+  reference
+});
 
   } catch (err) {
     console.error("❌ Plan purchase error:", err);
