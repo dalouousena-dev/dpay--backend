@@ -1213,79 +1213,59 @@ function getVipBenefits(planId) {
 
 // endpoint for purchasing a product
 app.post('/api/products/buy', async (req, res) => {
-  console.log('Received product purchase request', req.body);
   const auth = req.headers.authorization || '';
   const token = auth.replace('Bearer ', '');
-  const user = findUserByToken(token);
+
+  const user = await getUserByToken(token);
+
   if (!user) {
-    console.log('product purchase denied, invalid token');
     return res.status(401).json({ message: 'Invalid or missing token' });
   }
 
   const { productId } = req.body;
-  if (productId == null) {
-    return res.status(400).json({ message: 'Missing productId' });
-  }
 
   const product = PRODUCTS.find(p => p.id === productId);
   if (!product) return res.status(404).json({ message: 'Product not found' });
 
-  // ensure user has required VIP level
-  if (product.minVip && vipLevel(user.active_Plan) < vipLevel(product.minVip)) {
+  if (product.minVip && vipLevel(user.active_plan) < vipLevel(product.minVip)) {
     return res.status(403).json({ message: `Requires ${product.minVip.toUpperCase()} membership` });
   }
 
-  // enforce 13-day cooldown: if nextPurchaseWindowEnds exists and is in the future, block purchase
-  if (user.nextPurchaseWindowEnds) {
-    const nextWindow = new Date(user.nextPurchaseWindowEnds);
-    const now = new Date();
-    if (nextWindow > now) {
-      const diff = nextWindow.getTime() - now.getTime();
-      return res.status(429).json({ message: 'Next purchase window not yet open', retryAfterMs: diff, nextPurchaseWindowEnds: user.nextPurchaseWindowEnds });
-    }
+  if (user.next_purchase_window_ends && new Date(user.next_purchase_window_ends) > new Date()) {
+    return res.status(429).json({ message: 'Cooldown active' });
   }
-  
-  // Apply VIP purchase discount
-  const vipBenefits = getVipBenefits(user.active_Plan);
-  const discountAmount = Math.floor(product.price * vipBenefits.purchaseDiscount);
-  const finalPrice = product.price - discountAmount;
-  
-  if (balance < finalPrice) {
+
+  const vipBenefits = getVipBenefits(user.active_plan);
+  const discount = Math.floor(product.price * vipBenefits.purchaseDiscount);
+  const finalPrice = product.price - discount;
+
+  if (user.wallet_balance < finalPrice) {
     return res.status(400).json({ message: 'Insufficient balance' });
   }
 
-  // deduct discounted price and update purchase timestamps
-  user.walletBalance = balance - finalPrice;
-  const now = new Date();
-  user.lastProductPurchase = now.toISOString();
-  user.nextPurchaseWindowEnds = new Date(now.getTime() + 13 * 24 * 60 * 60 * 1000).toISOString();
+  const { error } = await supabase
+    .from('users')
+    .update({
+      wallet_balance: user.wallet_balance - finalPrice,
+      last_product_purchase: new Date().toISOString(),
+      next_purchase_window_ends: new Date(Date.now() + 13 * 24 * 60 * 60 * 1000).toISOString()
+    })
+    .eq('email', user.email);
 
-  // track owned products
-  user.ownedProducts = user.ownedProducts || {};
-  user.ownedProducts[productId] = (user.ownedProducts[productId] || 0) + 1;
-
-  user.transactions = user.transactions || [];
-  user.transactions.push({ id: crypto.randomBytes(8).toString('hex'), type: 'product_purchase', productId, amount: finalPrice, at: now.toISOString() });
-
-
-  // Also update Supabase
-  if (supabase) {
-    supabase
-      .from('users')
-      .update({
-        wallet_balance: user.walletBalance,
-        last_product_purchase: user.lastProductPurchase,
-        next_purchase_window_ends: user.nextPurchaseWindowEnds,
-      })
-      .eq('token', token)
-      .then(({ error }) => {
-        if (error) console.error('Error updating user in Supabase:', error);
-      });
+  if (error) {
+    return res.status(500).json({ message: 'Update failed' });
   }
 
-  return res.json({ message: 'Product purchased successfully', walletBalance: user.walletBalance, lastProductPurchase: user.lastProductPurchase, nextPurchaseWindowEnds: user.nextPurchaseWindowEnds });
-});
+  await supabase.from("transactions").insert({
+    user_email: user.email,
+    amount: finalPrice,
+    type: "product_purchase",
+    reference: `prod_${Date.now()}`,
+    status: "completed"
+  });
 
+  return res.json({ message: 'Product purchased successfully' });
+});
 // endpoint for selling a product back to platform
 app.post('/api/products/sell', async (req, res) => {
   console.log('Received product sell request', req.body);
