@@ -264,25 +264,34 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-let referrer = null;
+    // ✅ FIX 1: handle referral ONLY if provided
+    let referrerId = null;
 
-if (supabase) {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('referral_code', referralCode)
-    .single();
+    if (referralCode) {
+      let referrer = null;
 
-  if (!error && data) {
-    referrer = data;
-  }
-} else {
-  referrer = findUserByReferralCode(referralCode);
-}
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('referral_code', referralCode)
+          .single();
 
-if (!referrer) {
-  return res.status(400).json({ message: "Invalid referral code" });
-}
+        if (!error && data) {
+          referrer = data;
+        }
+      } else {
+        referrer = findUserByReferralCode(referralCode);
+      }
+
+      if (!referrer) {
+        return res.status(400).json({
+          message: "Invalid referral code"
+        });
+      }
+
+      referrerId = referrer.id;
+    }
 
     const newUser = {
       id: makeUUID(),
@@ -314,39 +323,33 @@ if (!referrer) {
       referral_count: 0
     };
 
-  const createdUser = await createUser(newUser);
+    const createdUser = await createUser(newUser);
 
-if (!createdUser || !createdUser.token) {
-  console.error("❌ User creation failed or token missing:", createdUser);
-  return res.status(500).json({ message: "User creation failed" });
-}
+    if (!createdUser || !createdUser.token) {
+      console.error("❌ User creation failed:", createdUser);
+      return res.status(500).json({
+        message: "User creation failed"
+      });
+    }
 
-    // Handle referral bonuses
-    if (referrerId) {
+    // ✅ FIX 2: update referrer in Supabase (NOT memory)
+    if (referrerId && supabase) {
 
-      const referrer = users.find(u => u.id === referrerId);
+      const { data: referrer, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', referrerId)
+        .single();
 
-      if (referrer) {
+      if (!error && referrer) {
 
-        const previousCount = referrer.referral_count || 0;
+        const newCount = (referrer.referral_count || 0) + 1;
 
-        referrer.referral_count = previousCount + 1;
+        await supabase
+          .from('users')
+          .update({ referral_count: newCount })
+          .eq('id', referrerId);
 
-        const tierBonus = checkTierUpgrade(previousCount, referrer.referral_count);
-
-        if (tierBonus > 0) {
-
-          referrer.wallet_balance = (referrer.wallet_balance || 0) + tierBonus;
-
-          const tier = getCommissionTier(referrer.referral_count);
-
-          await logTransaction(
-            referrerId,
-            "referral_tier_bonus",
-            tierBonus,
-            `Tier upgrade bonus - reached ${tier.commission} commission tier`
-          );
-        }
       }
     }
 
