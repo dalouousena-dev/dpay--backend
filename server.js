@@ -1244,7 +1244,7 @@ app.post('/api/products/buy', async (req, res) => {
       return res.status(401).json({ message: 'Missing token' });
     }
 
-    // ✅ Fetch user from DB (single source of truth)
+    // ✅ Fetch user
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -1269,33 +1269,32 @@ app.post('/api/products/buy', async (req, res) => {
       });
     }
 
-    const vipBenefits = getVipBenefits(user.active_plan);
-    const discount = Math.floor(product.price * vipBenefits.purchaseDiscount);
-    const finalPrice = product.price - discount;
-
     const now = new Date().toISOString();
     const cooldownEnd = user.next_purchase_window_ends;
+
+    // ✅ NO DISCOUNT — FULL PRICE
+    const price = product.price;
 
     console.log("🧪 PURCHASE DEBUG:", {
       user: user.email,
       balance: user.wallet_balance,
-      price: finalPrice,
+      price,
       cooldown: cooldownEnd,
       now
     });
 
-    // 🔴 CLEAR ERROR CHECKS (NO MORE GUESSING)
-
-    if ((user.wallet_balance || 0) < finalPrice) {
+    // ✅ Balance check
+    if ((user.wallet_balance || 0) < price) {
       return res.status(400).json({
         message: "Insufficient balance",
         details: {
           balance: user.wallet_balance,
-          price: finalPrice
+          price
         }
       });
     }
 
+    // ✅ Cooldown check
     if (cooldownEnd && new Date(cooldownEnd) > new Date()) {
       return res.status(400).json({
         message: "Cooldown active",
@@ -1305,8 +1304,9 @@ app.post('/api/products/buy', async (req, res) => {
       });
     }
 
-    // ✅ SAFE UPDATE (only now we update)
-    const newBalance = user.wallet_balance - finalPrice;
+    // ✅ Deduct FULL amount
+    const newBalance = user.wallet_balance - price;
+
     const newCooldown = new Date(
       Date.now() + 13 * 24 * 60 * 60 * 1000
     ).toISOString();
@@ -1328,20 +1328,14 @@ app.post('/api/products/buy', async (req, res) => {
     }
 
     // ✅ Log transaction
-    const { error: txError } = await supabase
-      .from("transactions")
-      .insert({
-        user_email: user.email,
-        amount: finalPrice,
-        type: "product_purchase",
-        reference: `prod_${Date.now()}`,
-        status: "completed",
-        created_at: now
-      });
-
-    if (txError) {
-      console.warn("⚠️ Transaction log failed:", txError.message);
-    }
+    await supabase.from("transactions").insert({
+      user_email: user.email,
+      amount: price,
+      type: "product_purchase",
+      reference: `prod_${Date.now()}`,
+      status: "completed",
+      created_at: now
+    });
 
     return res.json({
       message: "Product purchased successfully",
@@ -1815,3 +1809,58 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+
+const runDailyProfits = async () => {
+  console.log("💰 Running daily profit job...");
+
+  const { data: users, error } = await supabase
+    .from('users')
+    .select('*');
+
+  if (error) {
+    console.error("❌ Failed to fetch users:", error);
+    return;
+  }
+
+  const profitMap = {
+    vip1: 333,
+    vip2: 833,
+    vip3: 1667,
+    vip4: 3333,
+    vip5: 8333
+  };
+
+  // ✅ TODAY DATE (YYYY-MM-DD)
+  const today = new Date().toISOString().split('T')[0];
+
+  for (const user of users) {
+
+    if (!user.active_plan) continue;
+
+    const profit = profitMap[user.active_plan] || 0;
+    if (profit <= 0) continue;
+
+    // ✅ LAST PROFIT DATE
+    const lastDate = user.last_transaction_date
+      ? user.last_transaction_date.split('T')[0]
+      : null;
+
+    // 🔴 KEY CHECK (NO DOUBLE PROFIT SAME DAY)
+    if (lastDate === today) {
+      console.log(`⏳ Skipping ${user.email} (already paid today)`);
+      continue;
+    }
+
+    // ✅ APPLY PROFIT
+    await supabase
+      .from('users')
+      .update({
+        wallet_balance: (user.wallet_balance || 0) + profit,
+        total_profits: (user.total_profits || 0) + profit,
+        last_transaction_date: new Date().toISOString()
+      })
+      .eq('id', user.id);
+
+    console.log(`✅ Profit added to ${user.email}: ${profit}`);
+  }
+};
