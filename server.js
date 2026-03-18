@@ -284,9 +284,6 @@ if (!referrer) {
   return res.status(400).json({ message: "Invalid referral code" });
 }
 
-      referrerId = referrer.id;
-    }
-
     const newUser = {
       id: makeUUID(),
 
