@@ -756,13 +756,6 @@ app.get("/api/payments/check/:reference", async (req, res) => {
 });
 
 
-
-
-
-  /* =========================
-     MOBILE MONEY / DIRECT
-  ========================= */
-
 // Payment verification stub - in real app this would be called by payment gateway webhook
 
 app.post("/api/notchpay/webhook", async (req, res) => {
@@ -777,33 +770,29 @@ app.post("/api/notchpay/webhook", async (req, res) => {
       return res.status(400).json({ message: "Invalid payload" });
     }
 
-    // ✅ STRICT EVENT FILTERING
+    // Ignore irrelevant events
     if (!event || !event.includes("payment")) {
       console.log("⏭ Ignored non-payment event:", event);
       return res.sendStatus(200);
     }
 
-    // ✅ STRICT STATUS CHECK
+    // Only process successful payments
     const validStatuses = ["complete", "completed", "success"];
-
     if (!validStatuses.includes(payment.status)) {
       console.log("⏭ Ignored payment with status:", payment.status);
       return res.sendStatus(200);
     }
 
-    // ✅ SAFE METADATA EXTRACTION
-   const notchpayRef = payment.reference;
+    const notchpayRef = payment.reference;
 
-if (!notchpayRef) {
-  console.error("❌ Missing payment reference");
-  return res.sendStatus(400);
-}
+    if (!notchpayRef) {
+      console.error("❌ Missing payment reference");
+      return res.sendStatus(400);
+    }
 
-console.log("🔎 Processing reference:", notchpayRef);
+    console.log("🔎 Processing reference:", notchpayRef);
 
-    console.log("🔎 Processing merchantRef:", merchantRef);
-
-    // ✅ FETCH PENDING PAYMENT
+    // 🔥 FIND PAYMENT USING NOTCHPAY REFERENCE
     const { data: pendingPayment, error } = await supabase
       .from("pending_payments")
       .select("*")
@@ -811,32 +800,31 @@ console.log("🔎 Processing reference:", notchpayRef);
       .single();
 
     if (error || !pendingPayment) {
-      console.error("❌ Pending payment not found:", merchantRef);
+      console.error("❌ Pending payment not found:", notchpayRef);
       return res.status(404).json({ message: "Pending payment not found" });
     }
 
-    // ✅ IDEMPOTENCY CHECK (CRITICAL)
+    // Prevent double processing
     if (pendingPayment.status === "completed") {
-      console.log("⚠️ Already processed:", merchantRef);
+      console.log("⚠️ Already processed:", notchpayRef);
       return res.sendStatus(200);
     }
 
-    // ✅ UPDATE PAYMENT FIRST
+    // Update payment
     const { error: updateError } = await supabase
       .from("pending_payments")
       .update({
         status: "completed",
-        notchpay_reference: payment.reference,
         completed_at: new Date().toISOString()
       })
-      .eq("merchant_reference", merchantRef);
+      .eq("notchpay_reference", notchpayRef);
 
     if (updateError) {
       console.error("❌ Failed to update pending payment:", updateError);
       return res.sendStatus(500);
     }
 
-    // ✅ UPDATE USER
+    // Update user
     const { error: userError } = await supabase
       .from("users")
       .update({
@@ -850,7 +838,7 @@ console.log("🔎 Processing reference:", notchpayRef);
     }
 
     console.log("✅ Payment fully processed:", {
-      merchantRef,
+      reference: notchpayRef,
       email: pendingPayment.user_email,
       plan: pendingPayment.plan_id
     });
