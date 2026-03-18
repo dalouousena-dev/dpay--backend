@@ -1236,58 +1236,96 @@ function getVipBenefits(planId) {
 
 // endpoint for purchasing a product
 app.post('/api/products/buy', async (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
+  try {
+    const auth = req.headers.authorization || '';
+    const token = auth.replace('Bearer ', '');
 
-  const user = await getUserByToken(token);
+    if (!token) {
+      return res.status(401).json({ message: 'Missing token' });
+    }
 
-  if (!user) {
-    return res.status(401).json({ message: 'Invalid or missing token' });
+    // ✅ ALWAYS fetch fresh user from DB
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('token', token)
+      .single();
+
+    if (userError || !user) {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+
+    const { productId } = req.body;
+
+    const product = PRODUCTS.find(p => p.id === productId);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    // ✅ VIP check
+    if (product.minVip && vipLevel(user.active_plan) < vipLevel(product.minVip)) {
+      return res.status(403).json({
+        message: `Requires ${product.minVip.toUpperCase()} membership`
+      });
+    }
+
+    // ✅ Cooldown check
+    if (
+      user.next_purchase_window_ends &&
+      new Date(user.next_purchase_window_ends) > new Date()
+    ) {
+      return res.status(429).json({ message: 'Cooldown active' });
+    }
+
+    const vipBenefits = getVipBenefits(user.active_plan);
+    const discount = Math.floor(product.price * vipBenefits.purchaseDiscount);
+    const finalPrice = product.price - discount;
+
+    // 🔥 DEBUG (remove later)
+    console.log("Balance:", user.wallet_balance, "Price:", finalPrice);
+
+    if ((user.wallet_balance || 0) < finalPrice) {
+      return res.status(400).json({ message: 'Insufficient balance' });
+    }
+
+    // ✅ SAFE update using ID
+    const newBalance = user.wallet_balance - finalPrice;
+
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({
+        wallet_balance: newBalance,
+        last_product_purchase: new Date().toISOString(),
+        next_purchase_window_ends: new Date(
+          Date.now() + 13 * 24 * 60 * 60 * 1000
+        ).toISOString()
+      })
+      .eq('id', user.id); // ✅ FIXED
+
+    if (updateError) {
+      console.error("❌ Update failed:", updateError);
+      return res.status(500).json({ message: 'Update failed' });
+    }
+
+    // ✅ Log transaction
+    await supabase.from("transactions").insert({
+      user_email: user.email,
+      amount: finalPrice,
+      type: "product_purchase",
+      reference: `prod_${Date.now()}`,
+      status: "completed",
+      created_at: new Date().toISOString()
+    });
+
+    return res.json({
+      message: 'Product purchased successfully',
+      newBalance
+    });
+
+  } catch (err) {
+    console.error("🔥 Buy error:", err);
+    return res.status(500).json({ message: 'Server error' });
   }
-
-  const { productId } = req.body;
-
-  const product = PRODUCTS.find(p => p.id === productId);
-  if (!product) return res.status(404).json({ message: 'Product not found' });
-
-  if (product.minVip && vipLevel(user.active_plan) < vipLevel(product.minVip)) {
-    return res.status(403).json({ message: `Requires ${product.minVip.toUpperCase()} membership` });
-  }
-
-  if (user.next_purchase_window_ends && new Date(user.next_purchase_window_ends) > new Date()) {
-    return res.status(429).json({ message: 'Cooldown active' });
-  }
-
-  const vipBenefits = getVipBenefits(user.active_plan);
-  const discount = Math.floor(product.price * vipBenefits.purchaseDiscount);
-  const finalPrice = product.price - discount;
-
-  if (user.wallet_balance < finalPrice) {
-    return res.status(400).json({ message: 'Insufficient balance' });
-  }
-
-  const { error } = await supabase
-    .from('users')
-    .update({
-      wallet_balance: user.wallet_balance - finalPrice,
-      last_product_purchase: new Date().toISOString(),
-      next_purchase_window_ends: new Date(Date.now() + 13 * 24 * 60 * 60 * 1000).toISOString()
-    })
-    .eq('email', user.email);
-
-  if (error) {
-    return res.status(500).json({ message: 'Update failed' });
-  }
-
-  await supabase.from("transactions").insert({
-    user_email: user.email,
-    amount: finalPrice,
-    type: "product_purchase",
-    reference: `prod_${Date.now()}`,
-    status: "completed"
-  });
-
-  return res.json({ message: 'Product purchased successfully' });
 });
 // endpoint for selling a product back to platform
 app.post('/api/products/sell', async (req, res) => {
