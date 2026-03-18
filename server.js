@@ -347,6 +347,28 @@ app.post('/api/auth/register', async (req, res) => {
   }
 
 });
+app.get("/api/payment-status", async (req, res) => {
+  const ref = req.query.ref;
+
+  if (!ref) {
+    return res.status(400).json({ message: "Missing reference" });
+  }
+
+  const { data, error } = await supabase
+    .from("pending_payments")
+    .select("status, plan_id")
+    .eq("notchpay_reference", ref)
+    .single();
+
+  if (error || !data) {
+    return res.status(404).json({ message: "Payment not found" });
+  }
+
+  return res.json({
+    status: data.status,
+    plan: data.plan_id
+  });
+});
 
 app.post('/api/auth/admin-login', async (req, res) => {
   try {
@@ -504,21 +526,29 @@ app.get('/api/referral/stats', async (req, res) => {
 
 app.post("/api/plans/purchase", async (req, res) => {
   try {
-    const { userId, planId, amount } = req.body;
+    const { planId } = req.body;
     let email = req.body.email;
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({
-        message: "Server configuration error"
-      });
+      return res.status(500).json({ message: "Server configuration error" });
     }
 
-    if (!planId || !amount) {
-      return res.status(400).json({
-        message: "Plan ID and amount are required"
-      });
+    if (!planId) {
+      return res.status(400).json({ message: "Plan ID is required" });
+    }
+
+    // 🔥 NEVER trust frontend amount
+    const PLAN_PRICES = {
+      vip1: 10000,
+      vip2: 25000
+    };
+
+    const amount = PLAN_PRICES[planId];
+
+    if (!amount) {
+      return res.status(400).json({ message: "Invalid plan" });
     }
 
     // Extract email from token if missing
@@ -544,19 +574,28 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     const merchantReference = `plan_${planId}_${Date.now()}`;
 
+    // ✅ store BEFORE payment
     await supabase.from("pending_payments").insert({
       merchant_reference: merchantReference,
       user_email: email,
       plan_id: planId,
-       amount: amount,
+      amount: amount,
       status: "pending"
     });
+
+    const baseURL = apiKey.startsWith("sk_test")
+      ? "https://apisandbox.notchpay.co"
+      : "https://api.notchpay.co";
+
+    // 🔥 THIS IS THE MISSING PIECE
+    const successUrl = `https://yourfrontend.com/?ref=${merchantReference}`;
 
     const paymentData = {
       amount,
       currency: "XAF",
       description: `Purchase of plan ${planId}`,
       callback: "https://dpaybackend.onrender.com/api/notchpay/webhook",
+      success_url: successUrl, // ✅ FIXED
       email,
       metadata: {
         merchant_reference: merchantReference,
@@ -564,10 +603,6 @@ app.post("/api/plans/purchase", async (req, res) => {
         planId
       }
     };
-
-    const baseURL = apiKey.startsWith("sk_test")
-      ? "https://apisandbox.notchpay.co"
-      : "https://api.notchpay.co";
 
     const response = await fetch(`${baseURL}/payments`, {
       method: "POST",
@@ -591,7 +626,6 @@ app.post("/api/plans/purchase", async (req, res) => {
 
     console.log("NOTCHPAY INIT RESPONSE:", JSON.stringify(data, null, 2));
 
-    // 🔥 DO NOT BLOCK ON response.ok (NotchPay uses 201)
     if (!response.ok && data.code !== 201) {
       return res.status(500).json({
         message: "NotchPay initialization failed",
@@ -599,7 +633,6 @@ app.post("/api/plans/purchase", async (req, res) => {
       });
     }
 
-    // ✅ CORRECT EXTRACTION
     const paymentUrl = data?.authorization_url;
 
     if (!paymentUrl) {
@@ -614,12 +647,13 @@ app.post("/api/plans/purchase", async (req, res) => {
       data?.transaction?.reference ||
       data?.reference ||
       merchantReference;
-await supabase
-  .from("pending_payments")
-  .update({
-    notchpay_reference: reference
-  })
-  .eq("merchant_reference", merchantReference);
+
+    // ✅ link notchpay reference
+    await supabase
+      .from("pending_payments")
+      .update({ notchpay_reference: reference })
+      .eq("merchant_reference", merchantReference);
+
     return res.json({
       success: true,
       paymentUrl,
@@ -633,17 +667,6 @@ await supabase
       message: "Payment initialization failed"
     });
   }
-});
-
-
-app.get("/api/payments/verify", (req, res) => {
-
-  console.log("🔁 NotchPay redirect received:", req.query);
-
-  return res.redirect(
-    "https://computerarchi.com/Dpay/dashboard?notchpay_status=success"
-  );
-
 });
 
 
