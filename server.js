@@ -810,6 +810,15 @@ app.post("/api/notchpay/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+const expectedAmount = pendingPayment.amount; // or whatever column you store
+
+if (payment.amount !== expectedAmount) {
+  console.error("❌ Amount mismatch:", {
+    expected: expectedAmount,
+    received: payment.amount
+  });
+  return res.sendStatus(400);
+}
     // Update payment
     const { error: updateError } = await supabase
       .from("pending_payments")
@@ -836,6 +845,13 @@ app.post("/api/notchpay/webhook", async (req, res) => {
       console.error("❌ Failed to update user:", userError);
       return res.sendStatus(500);
     }
+    await supabase.from("transactions").insert({
+  user_email: pendingPayment.user_email,
+  amount: payment.amount,
+  type: "plan_purchase",
+  reference: notchpayRef,
+  status: "completed"
+});
 
     console.log("✅ Payment fully processed:", {
       reference: notchpayRef,
