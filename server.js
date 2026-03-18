@@ -590,19 +590,25 @@ app.post("/api/plans/purchase", async (req, res) => {
     // 🔥 THIS IS THE MISSING PIECE
     const successUrl = `https://yourfrontend.com/?ref=${merchantReference}`;
 
-    const paymentData = {
-      amount,
-      currency: "XAF",
-      description: `Purchase of plan ${planId}`,
-      callback: "https://dpaybackend.onrender.com/api/notchpay/webhook",
-      success_url: successUrl, // ✅ FIXED
-      email,
-      metadata: {
-        merchant_reference: merchantReference,
-        email,
-        planId
-      }
-    };
+const successUrl = `http://localhost:3000/?ref=${merchantReference}`;
+// ⚠️ change this to your real frontend URL when deployed
+
+const paymentData = {
+  amount,
+  currency: "XAF",
+  description: `Purchase of plan ${planId}`,
+
+  callback: "https://dpaybackend.onrender.com/api/notchpay/webhook", // backend
+
+  success_url: successUrl, // 🔥 THIS LINE FIXES YOUR PROBLEM
+
+  email,
+  metadata: {
+    merchant_reference: merchantReference,
+    email,
+    planId
+  }
+};
 
     const response = await fetch(`${baseURL}/payments`, {
       method: "POST",
