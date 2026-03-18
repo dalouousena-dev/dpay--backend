@@ -868,104 +868,111 @@ app.get("/api/payments/check/:reference", async (req, res) => {
 
 app.post("/api/notchpay/webhook", async (req, res) => {
   try {
-    console.log("🔔 NotchPay callback received:", JSON.stringify(req.body, null, 2));
-
     const event = req.body.event;
     const payment = req.body.data;
 
-    if (!payment) {
-      console.error("❌ Missing payment data");
-      return res.status(400).json({ message: "Invalid payload" });
-    }
-
-    // Ignore irrelevant events
-    if (!event || !event.includes("payment")) {
-      console.log("⏭ Ignored non-payment event:", event);
+    if (!payment || !event?.includes("payment")) {
       return res.sendStatus(200);
     }
 
-    // Only process successful payments
     const validStatuses = ["complete", "completed", "success"];
     if (!validStatuses.includes(payment.status)) {
-      console.log("⏭ Ignored payment with status:", payment.status);
       return res.sendStatus(200);
     }
 
-    const notchpayRef = payment.reference;
+    const ref = payment.reference;
+    if (!ref) return res.sendStatus(400);
 
-    if (!notchpayRef) {
-      console.error("❌ Missing payment reference");
+    console.log("🔎 Processing:", ref);
+
+    // 🔒 Step 1: Fetch payment
+    const { data: pending, error } = await supabase
+      .from("pending_payments")
+      .select("*")
+      .eq("notchpay_reference", ref)
+      .single();
+
+    if (error || !pending) {
+      console.error("❌ Payment not found");
+      return res.sendStatus(404);
+    }
+
+    // 🔒 Step 2: HARD idempotency check
+    if (pending.status === "completed") {
+      console.log("⚠️ Already processed:", ref);
+      return res.sendStatus(200);
+    }
+
+    // 🔒 Step 3: Validate amount
+    if (Number(payment.amount) !== Number(pending.amount)) {
+      console.error("❌ Amount mismatch");
       return res.sendStatus(400);
     }
 
-    console.log("🔎 Processing reference:", notchpayRef);
-
-    // 🔥 FIND PAYMENT USING NOTCHPAY REFERENCE
-    const { data: pendingPayment, error } = await supabase
-      .from("pending_payments")
+    // 🔒 Step 4: Fetch user
+    const { data: user, error: userErr } = await supabase
+      .from("users")
       .select("*")
-      .eq("notchpay_reference", notchpayRef)
+      .eq("email", pending.user_email)
       .single();
 
-    if (error || !pendingPayment) {
-      console.error("❌ Pending payment not found:", notchpayRef);
-      return res.status(404).json({ message: "Pending payment not found" });
+    if (userErr || !user) {
+      console.error("❌ User not found");
+      return res.sendStatus(500);
     }
 
-    // Prevent double processing
-    if (pendingPayment.status === "completed") {
-      console.log("⚠️ Already processed:", notchpayRef);
-      return res.sendStatus(200);
-    }
+    // 🔥 Step 5: Calculate new values
+    const newTotalDeposited = (user.total_deposited || 0) + payment.amount;
+    const newWalletBalance = (user.wallet_balance || 0) + payment.amount;
 
-const expectedAmount = pendingPayment.amount; // or whatever column you store
-
-if (payment.amount !== expectedAmount) {
-  console.error("❌ Amount mismatch:", {
-    expected: expectedAmount,
-    received: payment.amount
-  });
-  return res.sendStatus(400);
-}
-    // Update payment
-    const { error: updateError } = await supabase
+    // 🔒 Step 6: Mark payment completed FIRST (lock)
+    const { error: updatePaymentErr } = await supabase
       .from("pending_payments")
       .update({
         status: "completed",
         completed_at: new Date().toISOString()
       })
-      .eq("notchpay_reference", notchpayRef);
+      .eq("notchpay_reference", ref)
+      .eq("status", "pending"); // 🔥 ensures only one update
 
-    if (updateError) {
-      console.error("❌ Failed to update pending payment:", updateError);
+    if (updatePaymentErr) {
+      console.error("❌ Payment update failed:", updatePaymentErr);
       return res.sendStatus(500);
     }
 
-    // Update user
-    const { error: userError } = await supabase
+    // 🔒 Step 7: Update user (single source of truth)
+    const { error: updateUserErr } = await supabase
       .from("users")
       .update({
-        active_plan: pendingPayment.plan_id
+        active_plan: pending.plan_id,
+        total_deposited: newTotalDeposited,
+        wallet_balance: newWalletBalance
       })
-      .eq("email", pendingPayment.user_email);
+      .eq("email", pending.user_email);
 
-    if (userError) {
-      console.error("❌ Failed to update user:", userError);
+    if (updateUserErr) {
+      console.error("❌ User update failed:", updateUserErr);
       return res.sendStatus(500);
     }
-    await supabase.from("transactions").insert({
-  user_email: pendingPayment.user_email,
-  amount: payment.amount,
-  type: "plan_purchase",
-  reference: notchpayRef,
-  status: "completed"
-});
 
-    console.log("✅ Payment fully processed:", {
-      reference: notchpayRef,
-      email: pendingPayment.user_email,
-      plan: pendingPayment.plan_id
-    });
+    // 🔒 Step 8: Insert transaction safely
+    const { error: txErr } = await supabase
+      .from("transactions")
+      .insert({
+        user_email: pending.user_email,
+        amount: payment.amount,
+        type: "plan_purchase",
+        reference: ref,
+        status: "completed",
+        created_at: new Date().toISOString()
+      });
+
+    if (txErr) {
+      // ⚠️ If duplicate → ignore (idempotency)
+      console.warn("⚠️ Transaction already exists or failed:", txErr.message);
+    }
+
+    console.log("✅ SAFE payment processed:", ref);
 
     return res.sendStatus(200);
 
@@ -974,7 +981,6 @@ if (payment.amount !== expectedAmount) {
     return res.sendStatus(500);
   }
 });
-
 app.get("/api/transactions", async (req, res) => {
   try {
 
