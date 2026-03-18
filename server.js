@@ -587,8 +587,6 @@ app.post("/api/plans/purchase", async (req, res) => {
       ? "https://apisandbox.notchpay.co"
       : "https://api.notchpay.co";
 
-    // 🔥 THIS IS THE MISSING PIECE
-    const successUrl = `https://yourfrontend.com/?ref=${merchantReference}`;
 
 const successUrl = `http://localhost:3000/?ref=${merchantReference}`;
 // ⚠️ change this to your real frontend URL when deployed
