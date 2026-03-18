@@ -191,16 +191,26 @@ async function getUserByEmail(email) {
 
 // Create user in Supabase or file fallback
 async function createUser(userData) {
-  if (supabase) {
-    const { data, error } = await supabase
-      .from('users')
-      .insert([userData])
-      .select()
-      .single();
-   
-    console.error('Supabase insert error:', error);
+  if (!supabase) {
+    throw new Error("Supabase not initialized");
   }
- 
+
+  const { data, error } = await supabase
+    .from('users')
+    .insert([userData])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('❌ Supabase insert error:', error);
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("User insert returned no data");
+  }
+
+  return data; // ✅ THIS WAS MISSING
 }
 
 // Update user in Supabase or file fallback
@@ -254,17 +264,25 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    let referrerId = null;
+let referrer = null;
 
-    if (referralCode) {
+if (supabase) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('referral_code', referralCode)
+    .single();
 
-      const referrer = findUserByReferralCode(referralCode);
+  if (!error && data) {
+    referrer = data;
+  }
+} else {
+  referrer = findUserByReferralCode(referralCode);
+}
 
-      if (!referrer) {
-        return res.status(400).json({
-          message: "Invalid referral code"
-        });
-      }
+if (!referrer) {
+  return res.status(400).json({ message: "Invalid referral code" });
+}
 
       referrerId = referrer.id;
     }
@@ -299,7 +317,12 @@ app.post('/api/auth/register', async (req, res) => {
       referral_count: 0
     };
 
-    const createdUser = await createUser(newUser);
+  const createdUser = await createUser(newUser);
+
+if (!createdUser || !createdUser.token) {
+  console.error("❌ User creation failed or token missing:", createdUser);
+  return res.status(500).json({ message: "User creation failed" });
+}
 
     // Handle referral bonuses
     if (referrerId) {
