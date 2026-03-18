@@ -1244,7 +1244,7 @@ app.post('/api/products/buy', async (req, res) => {
       return res.status(401).json({ message: 'Missing token' });
     }
 
-    // ✅ Always fetch fresh user
+    // ✅ Fetch user from DB (single source of truth)
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -1274,40 +1274,60 @@ app.post('/api/products/buy', async (req, res) => {
     const finalPrice = product.price - discount;
 
     const now = new Date().toISOString();
-    const cooldownDate = new Date(
-      Date.now() + 13 * 24 * 60 * 60 * 1000
-    ).toISOString();
+    const cooldownEnd = user.next_purchase_window_ends;
 
-    console.log("🧪 Attempt purchase:", {
+    console.log("🧪 PURCHASE DEBUG:", {
       user: user.email,
       balance: user.wallet_balance,
       price: finalPrice,
-      cooldown: user.next_purchase_window_ends
+      cooldown: cooldownEnd,
+      now
     });
 
-    // ✅ ATOMIC UPDATE (THE CORE FIX)
+    // 🔴 CLEAR ERROR CHECKS (NO MORE GUESSING)
+
+    if ((user.wallet_balance || 0) < finalPrice) {
+      return res.status(400).json({
+        message: "Insufficient balance",
+        details: {
+          balance: user.wallet_balance,
+          price: finalPrice
+        }
+      });
+    }
+
+    if (cooldownEnd && new Date(cooldownEnd) > new Date()) {
+      return res.status(400).json({
+        message: "Cooldown active",
+        details: {
+          cooldownEnds: cooldownEnd
+        }
+      });
+    }
+
+    // ✅ SAFE UPDATE (only now we update)
+    const newBalance = user.wallet_balance - finalPrice;
+    const newCooldown = new Date(
+      Date.now() + 13 * 24 * 60 * 60 * 1000
+    ).toISOString();
+
     const { data: updatedUser, error: updateError } = await supabase
       .from('users')
       .update({
-        wallet_balance: user.wallet_balance - finalPrice,
+        wallet_balance: newBalance,
         last_product_purchase: now,
-        next_purchase_window_ends: cooldownDate
+        next_purchase_window_ends: newCooldown
       })
       .eq('id', user.id)
-      .gte('wallet_balance', finalPrice)
-      .or(`next_purchase_window_ends.is.null,next_purchase_window_ends.lte.${now}`)
       .select()
       .single();
 
     if (updateError || !updatedUser) {
-      console.error("❌ Atomic update failed:", updateError);
-
-      return res.status(400).json({
-        message: "Purchase failed (insufficient balance or cooldown active)"
-      });
+      console.error("❌ Update failed:", updateError);
+      return res.status(500).json({ message: 'Update failed' });
     }
 
-    // ✅ Log transaction ONLY after success
+    // ✅ Log transaction
     const { error: txError } = await supabase
       .from("transactions")
       .insert({
@@ -1321,18 +1341,17 @@ app.post('/api/products/buy', async (req, res) => {
 
     if (txError) {
       console.warn("⚠️ Transaction log failed:", txError.message);
-      // Do NOT rollback — purchase already succeeded
     }
 
     return res.json({
-      message: 'Product purchased successfully',
+      message: "Product purchased successfully",
       newBalance: updatedUser.wallet_balance,
       cooldownEnds: updatedUser.next_purchase_window_ends
     });
 
   } catch (err) {
     console.error("🔥 Buy error:", err);
-    return res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: "Server error" });
   }
 });
 // endpoint for selling a product back to platform
