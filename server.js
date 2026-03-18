@@ -548,6 +548,7 @@ app.post("/api/plans/purchase", async (req, res) => {
       merchant_reference: merchantReference,
       user_email: email,
       plan_id: planId,
+       amount: amount,
       status: "pending"
     });
 
