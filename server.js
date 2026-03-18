@@ -677,7 +677,7 @@ return res.json({
   }
 });
 
-app.get("/api/notchpay/callback", async (req, res) => {
+app.get("/api/notchpay/webhook", async (req, res) => {
   try {
     const reference =
       req.query.reference || req.query.trxref || req.query.id;
