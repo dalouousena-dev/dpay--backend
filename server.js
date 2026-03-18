@@ -588,7 +588,7 @@ app.post("/api/plans/purchase", async (req, res) => {
       : "https://api.notchpay.co";
 
 
-const successUrl = `http://localhost:3000/?ref=${merchantReference}`;
+const successUrl = `https://computerarchi.com/?ref=${merchantReference}`;
 // ⚠️ change this to your real frontend URL when deployed
 
 const paymentData = {
@@ -598,7 +598,7 @@ const paymentData = {
 
   callback: "https://dpaybackend.onrender.com/api/notchpay/webhook", // backend
 
-  success_url: successUrl, // 🔥 THIS LINE FIXES YOUR PROBLEM
+ return_url: successUrl, // 🔥 THIS LINE FIXES YOUR PROBLEM
 
   email,
   metadata: {
