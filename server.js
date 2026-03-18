@@ -588,7 +588,7 @@ app.post("/api/plans/purchase", async (req, res) => {
       : "https://api.notchpay.co";
 
 
-const successUrl = `https://computerarchi.com/?ref=${merchantReference}`;
+const successUrl = `https://computerarchi.com/Dpay/?ref=${merchantReference}`;
 // ⚠️ change this to your real frontend URL when deployed
 
 const paymentData = {
@@ -657,7 +657,7 @@ return_url: successUrl,
       .update({ notchpay_reference: reference })
       .eq("merchant_reference", merchantReference);
 
-    const redirectAfterPayment = `https://computerarchi.com/?ref=${merchantReference}`;
+    const redirectAfterPayment = `https://computerarchi.com/Dpay/?ref=${merchantReference}`;
 
 // Force redirect param into checkout URL
 const finalPaymentUrl = `${paymentUrl}?return_url=${encodeURIComponent(redirectAfterPayment)}`;
@@ -683,7 +683,7 @@ app.get("/api/notchpay/webhook", async (req, res) => {
       req.query.reference || req.query.trxref || req.query.id;
 
     if (!reference) {
-      return res.redirect("https://computerarchi.com/payment-error");
+      return res.redirect("https://computerarchi.com/Dpay/payment-error");
     }
 
     console.log("🔁 Callback hit:", reference);
@@ -705,13 +705,13 @@ app.get("/api/notchpay/webhook", async (req, res) => {
     const data = await verifyResponse.json();
 
     if (!verifyResponse.ok) {
-      return res.redirect("https://computerarchi.com/payment-error");
+      return res.redirect("https://computerarchi.com/Dpay/payment-error");
     }
 
     const payment = data.transaction || data;
 
     if (!["complete", "completed", "success"].includes(payment.status)) {
-      return res.redirect("https://computerarchi.com/payment-pending");
+      return res.redirect("https://computerarchi.com/Dpay/payment-pending");
     }
 
     const { data: pending, error } = await supabase
@@ -721,13 +721,13 @@ app.get("/api/notchpay/webhook", async (req, res) => {
       .single();
 
     if (error || !pending) {
-      return res.redirect("https://computerarchi.com/payment-error");
+      return res.redirect("https://computerarchi.com/Dpay/payment-error");
     }
 
     // 🔥 CRITICAL SECURITY CHECK
     if (payment.amount !== pending.amount) {
       console.error("❌ Amount mismatch");
-      return res.redirect("https://computerarchi.com/payment-error");
+      return res.redirect("https://computerarchi.com/Dpay/payment-error");
     }
 
     if (pending.status !== "completed") {
@@ -745,12 +745,12 @@ app.get("/api/notchpay/webhook", async (req, res) => {
     }
 
     return res.redirect(
-      `https://computerarchi.com/?ref=${reference}&status=success`
+      `https://computerarchi.com/Dpay/?ref=${reference}&status=success`
     );
 
   } catch (err) {
     console.error("🔥 Callback error:", err);
-    return res.redirect("https://computerarchi.com/payment-error");
+    return res.redirect("https://computerarchi.com/Dpay/payment-error");
   }
 });;
 
