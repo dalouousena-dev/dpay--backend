@@ -679,13 +679,14 @@ return res.json({
 
 app.get("/api/notchpay/callback", async (req, res) => {
   try {
-    const { reference } = req.query;
+    const reference =
+      req.query.reference || req.query.trxref || req.query.id;
 
     if (!reference) {
-      return res.status(400).send("Missing reference");
+      return res.redirect("https://computerarchi.com/payment-error");
     }
 
-    console.log("🔁 Callback hit with reference:", reference);
+    console.log("🔁 Callback hit:", reference);
 
     const apiKey = process.env.NOTCHPAY_API_KEY;
 
@@ -693,7 +694,6 @@ app.get("/api/notchpay/callback", async (req, res) => {
       ? "https://apisandbox.notchpay.co"
       : "https://api.notchpay.co";
 
-    // 🔍 VERIFY PAYMENT DIRECTLY
     const verifyResponse = await fetch(`${baseURL}/payments/${reference}`, {
       method: "GET",
       headers: {
@@ -705,31 +705,32 @@ app.get("/api/notchpay/callback", async (req, res) => {
     const data = await verifyResponse.json();
 
     if (!verifyResponse.ok) {
-      console.error("❌ Verification failed:", data);
-      return res.redirect(`https://computerarchi.com/payment-error`);
+      return res.redirect("https://computerarchi.com/payment-error");
     }
 
     const payment = data.transaction || data;
 
-    if (!payment) {
-      return res.redirect(`https://computerarchi.com/payment-error`);
-    }
-
-    // ⚠️ DO NOT trust blindly
     if (!["complete", "completed", "success"].includes(payment.status)) {
-      return res.redirect(`https://computerarchi.com/payment-pending`);
+      return res.redirect("https://computerarchi.com/payment-pending");
     }
 
-    console.log("✅ Payment verified via callback:", reference);
-
-    // 🔁 OPTIONAL SAFETY: ensure DB is updated
-    const { data: pending } = await supabase
+    const { data: pending, error } = await supabase
       .from("pending_payments")
       .select("*")
       .eq("notchpay_reference", reference)
       .single();
 
-    if (pending && pending.status !== "completed") {
+    if (error || !pending) {
+      return res.redirect("https://computerarchi.com/payment-error");
+    }
+
+    // 🔥 CRITICAL SECURITY CHECK
+    if (payment.amount !== pending.amount) {
+      console.error("❌ Amount mismatch");
+      return res.redirect("https://computerarchi.com/payment-error");
+    }
+
+    if (pending.status !== "completed") {
       await supabase
         .from("pending_payments")
         .update({ status: "completed" })
@@ -741,18 +742,17 @@ app.get("/api/notchpay/callback", async (req, res) => {
           active_plan: pending.plan_id
         })
         .eq("email", pending.user_email);
-
-      console.log("⚡ Fallback update executed");
     }
 
-    // ✅ FINAL REDIRECT TO FRONTEND
-    return res.redirect(`https://computerarchi.com/?ref=${reference}&status=success`);
+    return res.redirect(
+      `https://computerarchi.com/?ref=${reference}&status=success`
+    );
 
   } catch (err) {
     console.error("🔥 Callback error:", err);
-    return res.redirect(`https://computerarchi.com/payment-error`);
+    return res.redirect("https://computerarchi.com/payment-error");
   }
-});
+});;
 
 app.get("/api/payments/check/:reference", async (req, res) => {
   try {
