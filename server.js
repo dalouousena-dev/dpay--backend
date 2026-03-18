@@ -596,9 +596,8 @@ const paymentData = {
   currency: "XAF",
   description: `Purchase of plan ${planId}`,
 
-  callback: "https://dpaybackend.onrender.com/api/notchpay/webhook", // backend
-
- return_url: successUrl, // 🔥 THIS LINE FIXES YOUR PROBLEM
+  callback: "https://dpaybackend.onrender.com/api/notchpay/webhook", // webhook (keep)
+return_url: "https://dpaybackend.onrender.com/api/notchpay/callback"
 
   email,
   metadata: {
@@ -678,6 +677,82 @@ return res.json({
   }
 });
 
+app.get("/api/notchpay/callback", async (req, res) => {
+  try {
+    const { reference } = req.query;
+
+    if (!reference) {
+      return res.status(400).send("Missing reference");
+    }
+
+    console.log("🔁 Callback hit with reference:", reference);
+
+    const apiKey = process.env.NOTCHPAY_API_KEY;
+
+    const baseURL = apiKey.startsWith("sk_test")
+      ? "https://apisandbox.notchpay.co"
+      : "https://api.notchpay.co";
+
+    // 🔍 VERIFY PAYMENT DIRECTLY
+    const verifyResponse = await fetch(`${baseURL}/payments/${reference}`, {
+      method: "GET",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json"
+      }
+    });
+
+    const data = await verifyResponse.json();
+
+    if (!verifyResponse.ok) {
+      console.error("❌ Verification failed:", data);
+      return res.redirect(`https://computerarchi.com/payment-error`);
+    }
+
+    const payment = data.transaction || data;
+
+    if (!payment) {
+      return res.redirect(`https://computerarchi.com/payment-error`);
+    }
+
+    // ⚠️ DO NOT trust blindly
+    if (!["complete", "completed", "success"].includes(payment.status)) {
+      return res.redirect(`https://computerarchi.com/payment-pending`);
+    }
+
+    console.log("✅ Payment verified via callback:", reference);
+
+    // 🔁 OPTIONAL SAFETY: ensure DB is updated
+    const { data: pending } = await supabase
+      .from("pending_payments")
+      .select("*")
+      .eq("notchpay_reference", reference)
+      .single();
+
+    if (pending && pending.status !== "completed") {
+      await supabase
+        .from("pending_payments")
+        .update({ status: "completed" })
+        .eq("notchpay_reference", reference);
+
+      await supabase
+        .from("users")
+        .update({
+          active_plan: pending.plan_id
+        })
+        .eq("email", pending.user_email);
+
+      console.log("⚡ Fallback update executed");
+    }
+
+    // ✅ FINAL REDIRECT TO FRONTEND
+    return res.redirect(`https://computerarchi.com/?ref=${reference}&status=success`);
+
+  } catch (err) {
+    console.error("🔥 Callback error:", err);
+    return res.redirect(`https://computerarchi.com/payment-error`);
+  }
+});
 
 app.get("/api/payments/check/:reference", async (req, res) => {
   try {
