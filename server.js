@@ -595,11 +595,11 @@ const paymentData = {
   amount,
   currency: "XAF",
   description: `Purchase of plan ${planId}`,
-
+   email,
   callback: "https://dpaybackend.onrender.com/api/notchpay/webhook", // webhook (keep)
-return_url: "https://dpaybackend.onrender.com/api/notchpay/callback"
+return_url: successUrl, 
 
-  email,
+  
   metadata: {
     merchant_reference: merchantReference,
     email,
