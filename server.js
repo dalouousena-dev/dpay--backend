@@ -295,7 +295,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     const newUser = {
       id: makeUUID(),
-
+      is_active: true,
       email,
       password,
       username,
