@@ -572,10 +572,13 @@ app.post("/api/plans/purchase", async (req, res) => {
     }
 
     // 🔥 NEVER trust frontend amount
-    const PLAN_PRICES = {
-      vip1: 10000,
-      vip2: 25000
-    };
+   const PLAN_PRICES = {
+  vip1: 10000,
+  vip2: 25000,
+  vip3: 50000,
+  vip4: 100000,
+  vip5: 250000
+};
 
     const amount = PLAN_PRICES[planId];
 
