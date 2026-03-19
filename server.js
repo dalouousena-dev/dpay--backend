@@ -1152,13 +1152,13 @@ const PRODUCTS = [
   { id: 5, name: '⌚ Smartwatch', price: 8000, minVip: 'vip2' },
   { id: 6, name: '🎮 Gaming Console', price: 12000, minVip: 'vip3' },
   { id: 7, name: '📺 Smart TV', price: 35000, minVip: 'vip3' },
-  { id: 8, name: '🎹 Digital Piano', price: 20000, minVip: 'vip3' },
+  { id: 8, name: '🎹 Digital Piano', price: 50000, minVip: 'vip3' },
   { id: 9, name: '🏎️ Premium Electronics', price: 45000, minVip: 'vip4' },
   { id: 10, name: '💎 Jewelry', price: 50000, minVip: 'vip4' },
-  { id: 11, name: '✈️ Travel Vouchers', price: 30000, minVip: 'vip4' },
+  { id: 11, name: '✈️ Travel Vouchers', price: 100000, minVip: 'vip4' },
   { id: 12, name: '💍 Luxury Items', price: 100000, minVip: 'vip5' },
   { id: 13, name: '🛥️ Exclusive Access', price: 150000, minVip: 'vip5' },
-  { id: 14, name: '🌍 Global Benefits', price: 200000, minVip: 'vip5' },
+  { id: 14, name: '🌍 Global Benefits', price: 250000, minVip: 'vip5' },
 ];
 
 function vipLevel(planId) {
