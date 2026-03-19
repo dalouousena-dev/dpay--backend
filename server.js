@@ -779,6 +779,17 @@ app.get("/api/payments/check/:reference", async (req, res) => {
     const newTotalDeposited = (user.total_deposited || 0) + amount;
     const newWalletBalance = (user.wallet_balance || 0) + amount;
 
+const { data: pending, error: pendingError } = await supabase
+  .from("pending_payments")
+  .select("*")
+  .eq("notchpay_reference", reference)
+  .single();
+
+if (pendingError || !pending) {
+  return res.status(404).json({ message: "Pending payment not found" });
+}
+
+const planId = pending.plan_id;    
     // ✅ Update user
     await supabase
       .from("users")
@@ -1168,6 +1179,122 @@ function getVipBenefits(planId) {
   };
   return benefits[level] || benefits[0];
 }
+
+app.get("/api/notchpay/webhook", async (req, res) => {
+  try {
+    const reference =
+      req.query.reference || req.query.trxref || req.query.id;
+
+    if (!reference) {
+      return res.redirect("https://computerarchi.com/Dpay/payment-error");
+    }
+
+    console.log("🔁 Callback hit:", reference);
+
+    const apiKey = process.env.NOTCHPAY_API_KEY;
+
+    const baseURL = apiKey.startsWith("sk_test")
+      ? "https://apisandbox.notchpay.co"
+      : "https://api.notchpay.co";
+
+    const verifyResponse = await fetch(`${baseURL}/payments/${reference}`, {
+      method: "GET",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json"
+      }
+    });
+
+    const data = await verifyResponse.json();
+
+    if (!verifyResponse.ok) {
+      return res.redirect("https://computerarchi.com/Dpay/payment-error");
+    }
+
+    const payment = data.transaction || data;
+
+    if (!["complete", "completed", "success"].includes(payment.status)) {
+      return res.redirect("https://computerarchi.com/Dpay/payment-pending");
+    }
+
+    const { data: pending, error } = await supabase
+      .from("pending_payments")
+      .select("*")
+      .eq("notchpay_reference", reference)
+      .single();
+
+    if (error || !pending) {
+      return res.redirect("https://computerarchi.com/Dpay/payment-error");
+    }
+
+    // 🔥 CRITICAL SECURITY CHECK
+    if (payment.amount !== pending.amount) {
+      console.error("❌ Amount mismatch");
+      return res.redirect("https://computerarchi.com/Dpay/payment-error");
+    }
+
+  if (pending.status !== "completed") {
+
+  // 1️⃣ Get user first
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("*")
+    .eq("email", pending.user_email)
+    .single();
+
+  if (userError || !user) {
+    console.error("❌ User not found");
+    return res.redirect("https://computerarchi.com/Dpay/payment-error");
+  }
+
+  // 2️⃣ Calculate new values
+  const newTotalDeposited = (user.total_deposited || 0) + pending.amount;
+  const newWalletBalance = (user.wallet_balance || 0) + pending.amount;
+
+  // 3️⃣ Mark payment completed FIRST (important)
+  await supabase
+    .from("pending_payments")
+    .update({ status: "completed" })
+    .eq("notchpay_reference", reference);
+
+  // 4️⃣ Update user (FULL FIX)
+  await supabase
+    .from("users")
+    .update({
+      active_plan: pending.plan_id,
+      wallet_balance: newWalletBalance,
+      total_deposited: newTotalDeposited,
+      withdrawal_available_at: new Date(
+        Date.now() + 30 * 24 * 60 * 60 * 1000
+      ).toISOString()
+    })
+    .eq("email", pending.user_email);
+
+  // 5️⃣ Insert transaction (you were missing this)
+  await supabase
+    .from("transactions")
+    .insert({
+      user_email: pending.user_email,
+      type: "plan_purchase",
+      description: `Purchase of plan ${pending.plan_id}`,
+      amount: pending.amount,
+      status: "completed",
+      reference: reference,
+      created_at: new Date().toISOString()
+    });
+
+  console.log("✅ Payment fully processed:", pending.plan_id);
+}
+
+    return res.redirect(
+      `https://computerarchi.com/Dpay/?ref=${reference}&status=success`
+    );
+
+  } catch (err) {
+    console.error("🔥 Callback error:", err);
+    return res.redirect("https://computerarchi.com/Dpay/payment-error");
+  }
+});;
 
 // endpoint for purchasing a product
 app.post('/api/products/buy', async (req, res) => {
