@@ -508,42 +508,51 @@ app.get('/api/users/profile', async (req, res) => {
 // --- referral endpoints ---
 
 app.get('/api/referral/stats', async (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  
   try {
-    let user;
-    user = findUserByToken(token);
-    if (!user) {
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('token', token)
-          .single();
-        if (!error && data) {
-          user = data;
-        }
-      }
-    }
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid or missing token' });
+    const token = (req.headers.authorization || '').replace('Bearer ', '');
+
+    if (!token) {
+      return res.status(401).json({ message: 'Missing token' });
     }
 
-    const referralCount = user.referral_count || user.referralCount || 0;
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('token', token)
+      .single();
+
+    if (error || !user) {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+
+    // ✅ REAL referral count (NOT stored field)
+    const { count, error: countError } = await supabase
+  .from('users')
+  .select('*', { count: 'exact', head: true })
+  .eq('referrer_id', user.id);;
+
+    if (countError) {
+      console.error("Referral count error:", countError);
+      return res.status(500).json({ message: 'Failed to count referrals' });
+    }
+
+    const referralCount = count || 0;
+
     const tier = getCommissionTier(referralCount);
 
-    res.json({
-      referralCode: user.referral_code || user.referralCode,
-      referralCount: referralCount,
+    return res.json({
+      referralCode: user.referral_code,
+      referralCount,
       commission: tier.commission,
+      commissionRate: tier.rate,
       dailyEarnings: tier.daily,
       bonus: tier.bonus,
-      badge: tier.badge,
+      badge: tier.badge
     });
+
   } catch (err) {
     console.error('Error fetching referral stats:', err);
-    res.status(500).json({ message: 'Error fetching referral stats' });
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
