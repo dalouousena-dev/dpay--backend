@@ -1378,7 +1378,8 @@ app.post('/api/products/buy', async (req, res) => {
       .update({
         wallet_balance: newBalance,
         last_product_purchase: now,
-        next_purchase_window_ends: newCooldown
+        next_purchase_window_ends: newCooldown,
+        is_earning: true
       })
       .eq('id', user.id)
       .select()
@@ -1448,6 +1449,8 @@ app.post('/api/products/sell', async (req, res) => {
       .from('users')
       .update({
         wallet_balance: user.walletBalance,
+        is_earning: false,
+        next_purchase_window_ends: newCooldown
       })
       .eq('token', token)
       .then(({ error }) => {
@@ -1871,8 +1874,11 @@ app.listen(PORT, () => {
   console.log(`🚀 DPAY backend running on port ${PORT}`);
   console.log("====================================");
 });
+// 🔥 RUN ON START (so users see profit immediately if eligible)
+runDailyProfits();
 
 const runDailyProfits = async () => {
+  setInterval(runDailyProfits, 24 * 60 * 60 * 1000);
   console.log("💰 Running daily profit job...");
 
   const { data: users, error } = await supabase
@@ -1897,7 +1903,7 @@ const runDailyProfits = async () => {
 
   for (const user of users) {
 
-    if (!user.active_plan) continue;
+  if (!user.active_plan || !user.is_earning) continue;
 
     const profit = profitMap[user.active_plan] || 0;
     if (profit <= 0) continue;
