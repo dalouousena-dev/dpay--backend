@@ -556,6 +556,40 @@ app.get('/api/referral/stats', async (req, res) => {
   }
 });
 
+app.get('/api/referral/code', async (req, res) => {
+  try {
+    const token = (req.headers.authorization || '').replace('Bearer ', '');
+
+    if (!token) {
+      return res.status(401).json({ message: 'Missing token' });
+    }
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('token', token)
+      .single();
+
+    if (error || !user) {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+
+    const referralCode = user.referral_code;
+
+    // 🔥 THIS IS WHAT YOU WERE MISSING
+    const referralLink = `https://computerarchi.com/Dpay/register?ref=${referralCode}`;
+
+    return res.json({
+      referralCode,
+      referralLink
+    });
+
+  } catch (err) {
+    console.error('Referral code error:', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
 app.post("/api/plans/purchase", async (req, res) => {
   try {
     const { planId } = req.body;
