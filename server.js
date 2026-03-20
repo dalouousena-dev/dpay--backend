@@ -1258,7 +1258,7 @@ console.log("⚠️ GET webhook hit - no processing");
 return res.redirect(
   `https://computerarchi.com/Dpay/?ref=${reference}&status=success`
 );
-
+      }
   } catch (err) {
     console.error("🔥 Callback error:", err);
     return res.redirect("https://computerarchi.com/Dpay/payment-error");
