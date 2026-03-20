@@ -788,7 +788,7 @@ app.get("/api/payments/check/:reference", async (req, res) => {
 
     // Not completed yet
     if (!["complete", "completed", "success"].includes(transaction.status)) {
-      return res.json({ status: transaction.status });
+  
     }
 
     const amount = Number(transaction.amount) || 0;
@@ -813,42 +813,11 @@ app.get("/api/payments/check/:reference", async (req, res) => {
     const newTotalDeposited = (user.total_deposited || 0) + amount;
     const newWalletBalance = (user.wallet_balance || 0) + amount;
 
-const { data: pending, error: pendingError } = await supabase
-  .from("pending_payments")
-  .select("*")
-  .eq("notchpay_reference", reference)
-  .single();
-
-if (pendingError || !pending) {
-  return res.status(404).json({ message: "Pending payment not found" });
-}
-
-const planId = pending.plan_id;    
-    // ✅ Update user
-    await supabase
-      .from("users")
-      .update({
-        active_plan: planId,
-        wallet_balance: newWalletBalance,
-        total_deposited: newTotalDeposited,
-        withdrawal_available_at: new Date(
-          Date.now() + 30 * 24 * 60 * 60 * 1000
-        )
-      })
-      .eq("email", email);
-
-    // ✅ Log transaction
-    await supabase
-      .from("transactions")
-      .insert({
-        user_email: email,
-        type: "plan_purchase",
-        description: `Purchase of plan ${planId}`,
-        amount: amount,
-        status: "completed",
-        reference: transaction.reference,
-        at: new Date()
-      });
+// 🔒 DO NOT CREDIT MONEY HERE
+return res.json({
+  status: "complete",
+  reference: transaction.reference
+});
 
     console.log("✅ Plan activated via polling:", email, planId);
 
@@ -1282,47 +1251,13 @@ app.get("/api/notchpay/webhook", async (req, res) => {
   }
 
   // 2️⃣ Calculate new values
-  const newTotalDeposited = (user.total_deposited || 0) + pending.amount;
-  const newWalletBalance = (user.wallet_balance || 0) + pending.amount;
+// 🔒 DO NOT PROCESS PAYMENT HERE
+console.log("⚠️ GET webhook hit - no processing");
 
-  // 3️⃣ Mark payment completed FIRST (important)
-  await supabase
-    .from("pending_payments")
-    .update({ status: "completed" })
-    .eq("notchpay_reference", reference);
-
-  // 4️⃣ Update user (FULL FIX)
-  await supabase
-    .from("users")
-    .update({
-      active_plan: pending.plan_id,
-      wallet_balance: newWalletBalance,
-      total_deposited: newTotalDeposited,
-      withdrawal_available_at: new Date(
-        Date.now() + 30 * 24 * 60 * 60 * 1000
-      ).toISOString()
-    })
-    .eq("email", pending.user_email);
-
-  // 5️⃣ Insert transaction (you were missing this)
-  await supabase
-    .from("transactions")
-    .insert({
-      user_email: pending.user_email,
-      type: "plan_purchase",
-      description: `Purchase of plan ${pending.plan_id}`,
-      amount: pending.amount,
-      status: "completed",
-      reference: reference,
-      created_at: new Date().toISOString()
-    });
-
-  console.log("✅ Payment fully processed:", pending.plan_id);
-}
-
-    return res.redirect(
-      `https://computerarchi.com/Dpay/?ref=${reference}&status=success`
-    );
+// just redirect
+return res.redirect(
+  `https://computerarchi.com/Dpay/?ref=${reference}&status=success`
+);
 
   } catch (err) {
     console.error("🔥 Callback error:", err);
