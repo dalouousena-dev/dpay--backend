@@ -1455,12 +1455,18 @@ app.post('/api/users/request-withdrawal', async (req, res) => {
       .limit(1)
       .single();
 
-    if (error || !data) {
-      console.error("Supabase error:", error);
-      return res.status(401).json({
-        message: "Invalid or missing token"
-      });
-    }
+   if (error) {
+  console.error("Supabase error:", error);
+  return res.status(500).json({
+    message: "Database error"
+  });
+}
+
+if (!data) {
+  return res.status(401).json({
+    message: "Invalid token"
+  });
+}
 
     console.log("USER FOUND:", data.email);
 
