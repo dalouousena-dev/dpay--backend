@@ -929,15 +929,16 @@ app.post("/api/notchpay/webhook", async (req, res) => {
 
     // 🔒 Step 8: Insert transaction safely
     const { error: txErr } = await supabase
-      .from("transactions")
-      .insert({
-        user_email: pending.user_email,
-        amount: payment.amount,
-        type: "plan_purchase",
-        reference: ref,
-        status: "completed",
-        created_at: new Date().toISOString()
-      });
+  .from("transactions")
+  .insert({
+    user_id: user.id, // ✅ FIXED
+    amount: payment.amount,
+    type: "plan_purchase",
+    description: `Purchase of plan ${pending.plan_id}`, // ✅ add this
+    reference: ref,
+    status: "completed",
+    created_at: new Date().toISOString()
+  });
 
     if (txErr) {
       // ⚠️ If duplicate → ignore (idempotency)
