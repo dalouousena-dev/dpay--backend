@@ -1360,15 +1360,19 @@ app.post('/api/products/buy', async (req, res) => {
     }
 
     // ✅ Log transaction
-await supabase.from("transactions").insert({
-  user_id: user.id, // 🔥 MUST match DB column
-  amount: payment.amount,
-  type: "plan_purchase", // or product_purchase etc
-  description: `Purchase of plan ${planId}`,
-  status: "completed",
-  reference: reference,
-  created_at: new Date().toISOString()
-});
+try {
+  await supabase.from("transactions").insert({
+    user_id: user.id,
+    amount: price,
+    type: "product_purchase",
+    description: `Purchase of product ${product.name}`,
+    status: "completed",
+    reference: `product_${productId}_${Date.now()}`,
+    created_at: new Date().toISOString()
+  });
+} catch (err) {
+  console.error("❌ Transaction log failed:", err);
+}
 
     return res.json({
       message: "Product purchased successfully",
