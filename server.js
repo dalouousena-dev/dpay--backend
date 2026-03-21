@@ -437,74 +437,7 @@ app.post('/api/auth/admin-login', async (req, res) => {
     res.status(500).json({ message: "Server error during admin login" });
   }
 });
-// --- user/profile and transactions ---
 
-
-app.get('/api/users/profile', async (req, res) => {
-  try {
-
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        message: "Missing authorization token"
-      });
-    }
-
-    const token = authHeader.split(" ")[1];
-
-    console.log("TOKEN RECEIVED:", token);
-
-    if (!token) {
-      return res.status(401).json({
-        message: "Invalid token"
-      });
-    }
-
-    if (!supabase) {
-      console.error("Supabase not initialized");
-      return res.status(500).json({
-        message: "Database connection error"
-      });
-    }
-
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("token", token)
-      .limit(1)
-      .single();
-
-    if (error || !data) {
-      console.error("Supabase error:", error);
-      return res.status(401).json({
-        message: "Invalid or missing token"
-      });
-    }
-
-    console.log("USER FOUND:", data.email);
-
-    // remove password
-    const { password, ...publicData } = data;
-
-    // 🔵 map database field to frontend field
-  const formattedUser = {
-  ...publicData,
-  activePlan: publicData.active_plan || null
-};
-
-    return res.json(formattedUser);
-
-  } catch (err) {
-
-    console.error("Error fetching profile:", err);
-
-    return res.status(500).json({
-      message: "Error fetching profile"
-    });
-
-  }
-});
 // --- referral endpoints ---
 
 app.get('/api/referral/stats', async (req, res) => {
@@ -1007,24 +940,26 @@ app.get("/api/users/profile", async (req, res) => {
     }
 
     // Return fields using database names
-    res.json({
-      id: user.id,
-      username: user.username,
-      email: user.email,
+  res.json({
+  id: user.id,
+  username: user.username,
+  email: user.email,
 
-      active_plan: user.active_plan,
-      wallet_balance: user.wallet_balance,
-      total_deposited: user.total_deposited,
-      total_profits: user.total_profits,
+  active_plan: user.active_plan,
+  wallet_balance: user.wallet_balance,
+  total_deposited: user.total_deposited,
+  total_profits: user.total_profits,
 
-      withdrawal_available_at: user.withdrawal_available_at,
-      last_transaction_date: user.last_transaction_date,
-      last_product_purchase: user.last_product_purchase,
+  withdrawal_available_at: user.withdrawal_available_at,
+  last_transaction_date: user.last_transaction_date,
+  last_product_purchase: user.last_product_purchase,
 
-      created_at: user.created_at,
-      referral_code: user.referral_code,
-      is_active: user.is_active
-    });
+  next_purchase_window_ends: user.next_purchase_window_ends, // ✅ ADD THIS
+
+  created_at: user.created_at,
+  referral_code: user.referral_code,
+  is_active: user.is_active
+});
 
   } catch (err) {
 
