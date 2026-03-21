@@ -488,30 +488,9 @@ app.get('/api/users/profile', async (req, res) => {
     const { password, ...publicData } = data;
 
     // 🔵 map database field to frontend field
-   const formattedUser = {
-  id: publicData.id,
-  username: publicData.username,
-  email: publicData.email,
-
-  // ✅ financials
-  walletBalance: publicData.wallet_balance,
-  totalDeposited: publicData.total_deposited,
-  totalProfits: publicData.total_profits,
-
-  // ✅ plans
-  activePlan: publicData.active_plan,
-
-  // ✅ dates (FIX YOUR COUNTDOWN HERE)
-  lastTransactionDate: publicData.last_transaction_date,
-  lastProductPurchase: publicData.last_product_purchase,
-  withdrawalAvailableAt: publicData.withdrawal_available_at,
-  createdAt: publicData.created_at,
-
-  // ✅ referral
-  referralCode: publicData.referral_code,
-
-  // ✅ status
-  isActive: publicData.is_active
+  const formattedUser = {
+  ...publicData,
+  activePlan: publicData.active_plan || null
 };
 
     return res.json(formattedUser);
