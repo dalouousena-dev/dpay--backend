@@ -864,10 +864,9 @@ app.post("/api/notchpay/webhook", async (req, res) => {
     const { error: txErr } = await supabase
   .from("transactions")
   .insert({
-    user_id: user.id, // ✅ FIXED
+    user_email: pending.user_email,
     amount: payment.amount,
     type: "plan_purchase",
-    description: `Purchase of plan ${pending.plan_id}`, // ✅ add this
     reference: ref,
     status: "completed",
     created_at: new Date().toISOString()
@@ -969,6 +968,7 @@ app.get("/api/users/profile", async (req, res) => {
 
   }
 });
+
 
 // Health check endpoint for NotchPay webhook configuration
 app.get('/api/webhooks/notchpay/health', (req, res) => {
@@ -1426,6 +1426,81 @@ app.post('/api/users/request-withdrawal', async (req, res) => {
   });
 });
 
+   app.get("/api/users/profile", async (req, res) => {
+     try { 
+  // Get token from Authorization header 
+  const authHeader = req.headers.authorization; 
+  if (!authHeader || !authHeader.startsWith("Bearer ")) { 
+    return res.status(401).json({ message: "Missing authorization token" }); } 
+  const token = authHeader.split(" ")[1];
+  // Fetch user 
+  const { data: user, error } = await supabase 
+    .from("users") 
+    .select("*") 
+    .eq("token", token) 
+    .single(); 
+  if (error || !user) { 
+    return res.status(404).json({ message: "User not found" });
+  } 
+  // Return fields using database names
+  res.json({ 
+    id: user.id, 
+    username: user.username, 
+    email: user.email, 
+    active_plan: user.active_plan, 
+    wallet_balance: user.wallet_balance, 
+    total_deposited: user.total_deposited, 
+    total_profits: user.total_profits, 
+    withdrawal_available_at: user.withdrawal_available_at, 
+    last_transaction_date: user.last_transaction_date, 
+    last_product_purchase: user.last_product_purchase, 
+    created_at: user.created_at, 
+    referral_code: user.referral_code, 
+    is_active: user.is_active
+  }); 
+} catch (err) { 
+  console.error("Profile error:", err); 
+  res.status(500).json({ message: "Failed to load profile" });
+} }); 
+  const token = authHeader.split(" ")[1];
+ console.log("TOKEN RECEIVED:", token); 
+ if (!token) { 
+   return res.status(401).json({ 
+     message: "Invalid token" 
+   }); 
+ } if (!supabase) { 
+   console.error("Supabase not initialized"); 
+   return res.status(500).json({ 
+     message: "Database connection error" 
+   }); 
+ } 
+ const { data, error } = await supabase 
+   .from("users") 
+   .select("*") 
+   .eq("token", token) 
+   .limit(1) 
+   .single(); 
+if (error || !data) { 
+  console.error("Supabase error:", error); 
+  return res.status(401).json({
+    message: "Invalid or missing token" 
+  }); 
+} 
+ console.log("USER FOUND:", data.email); 
+ // remove password 
+  const { password, ...publicData } = data; 
+ // 🔵 map database field to frontend field 
+const formattedUser = { 
+  ...publicData, 
+  activePlan: publicData.active_plan || null }; 
+return res.json(formattedUser); 
+} catch (err) { 
+  console.error("Error fetching profile:", err);
+  return res.status(500).json({ 
+    message: "Error fetching profile" 
+  });
+} 
+});
 // --- admin endpoints ---
 
 app.get('/api/admin/users', async (req, res) => {
