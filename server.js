@@ -1790,6 +1790,13 @@ app.use((err, req, res, next) => {
 /* ===============================
    START SERVER
 ================================ */
+app.use(express.static(path.join(__dirname, "build")));
+
+// Catch ALL routes and send React app
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "build", "index.html"));
+});
+
 app.listen(PORT, () => {
   console.log("====================================");
   console.log(`🚀 DPAY backend running on port ${PORT}`);
@@ -1853,3 +1860,7 @@ const runDailyProfits = async () => {
     console.log(`✅ Profit added to ${user.email}: ${profit}`);
   }
 };
+
+// Serve React build
+
+
