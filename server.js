@@ -915,61 +915,6 @@ app.get("/api/transactions", async (req, res) => {
 });
 
 
-app.get("/api/users/profile", async (req, res) => {
-  try {
-
-    // Get token from Authorization header
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Missing authorization token" });
-    }
-
-    const token = authHeader.split(" ")[1];
-
-    // Fetch user
-    const { data: user, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("token", token)
-      .single();
-
-    if (error || !user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Return fields using database names
-  res.json({
-  id: user.id,
-  username: user.username,
-  email: user.email,
-
-  active_plan: user.active_plan,
-  wallet_balance: user.wallet_balance,
-  total_deposited: user.total_deposited,
-  total_profits: user.total_profits,
-
-  withdrawal_available_at: user.withdrawal_available_at,
-  last_transaction_date: user.last_transaction_date,
-  last_product_purchase: user.last_product_purchase,
-
-  next_purchase_window_ends: user.next_purchase_window_ends, // ✅ ADD THIS
-
-  created_at: user.created_at,
-  referral_code: user.referral_code,
-  is_active: user.is_active
-});
-
-  } catch (err) {
-
-    console.error("Profile error:", err);
-
-    res.status(500).json({ message: "Failed to load profile" });
-
-  }
-});
-
-
 // Health check endpoint for NotchPay webhook configuration
 app.get('/api/webhooks/notchpay/health', (req, res) => {
 
