@@ -1512,12 +1512,6 @@ try {
 } catch (err) {
   console.error("❌ Reward error:", err);
 }
-    .from("users")
-    .update({
-      wallet_balance: updatedUser.wallet_balance,
-      total_profits: updatedUser.total_profits,
-      reward_given: updatedUser.reward_given
-    })
     .eq("id", updatedUser.id);
 }
     // remove password
