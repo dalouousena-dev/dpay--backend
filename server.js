@@ -223,10 +223,15 @@ async function createUser(userData) {
     .select()
     .single();
 
- if (error) {
-  if (error.code === "23505") { // PostgreSQL unique violation
+if (error) {
+
+  console.error('❌ Supabase insert error:', error);
+
+  // 🔥 HANDLE DUPLICATE EMAIL CLEANLY
+  if (error.code === "23505") {
     throw new Error("Email already exists");
   }
+
   throw error;
 }
 
@@ -385,7 +390,7 @@ app.post('/api/auth/register', async (req, res) => {
 
   } catch (err) {
 
-    console.error("Registration error:", err);
+   console.error("🔥 FULL REGISTRATION ERROR:", JSON.stringify(err, null, 2));
 
    return res.status(500).json({
   message: err.message || "Registration failed"
