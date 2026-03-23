@@ -141,6 +141,34 @@ function findUserByReferralCode(code) {
 
 // calculate commission tier based on referral count
 function getCommissionTier(referralCount) {
+  function apply13DayReward(user) {
+  if (!user.next_purchase_window_ends) return user;
+
+  const now = new Date();
+  const cooldownEnd = new Date(user.next_purchase_window_ends);
+
+  // ❌ Still in cooldown
+  if (cooldownEnd > now) return user;
+
+  // ❌ Already rewarded
+  if (user.reward_given) return user;
+
+  const percentage = 0.32292;
+
+  const reward = Math.floor((user.total_deposited || 0) * percentage);
+
+  if (reward <= 0) return user;
+
+  // ✅ Apply reward
+  user.wallet_balance = (user.wallet_balance || 0) + reward;
+  user.total_profits = (user.total_profits || 0) + reward;
+
+  user.reward_given = true;
+
+  console.log(`🎁 Reward given to ${user.email}: ${reward}`);
+
+  return user;
+}
   if (referralCount >= 100) return { commissionPercent: 0.20, commission: '20%', daily: 6000, bonusAmount: 0, bonus: 'Elite Partner - VIP benefits', badge: '👑' };
   if (referralCount >= 51) return { commissionPercent: 0.15, commission: '15%', daily: 2250, bonusAmount: 15000, bonus: '15,000 FCFA bonus', badge: '💎' };
   if (referralCount >= 31) return { commissionPercent: 0.12, commission: '12%', daily: 840, bonusAmount: 5000, bonus: '5,000 FCFA bonus', badge: '🌟' };
@@ -854,6 +882,62 @@ app.post("/api/notchpay/webhook", async (req, res) => {
         wallet_balance: newWalletBalance
       })
       .eq("email", pending.user_email);
+    // 🔥 REFERRAL COMMISSION (ADD THIS HERE)
+
+if (user.referrer_id) {
+
+  // 1️⃣ Get parent
+  const { data: parent, error: parentError } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", user.referrer_id)
+    .single();
+
+  if (!parentError && parent) {
+
+    // 2️⃣ Count referrals of parent
+    const { count } = await supabase
+      .from("users")
+      .select("*", { count: "exact", head: true })
+      .eq("referrer_id", parent.id);
+
+    const referralCount = count || 0;
+
+    // 3️⃣ Get commission %
+    const tier = getCommissionTier(referralCount);
+    const percent = tier.commissionPercent || 0;
+
+    // 4️⃣ Calculate commission
+    const commission = Math.floor(payment.amount * percent);
+
+    if (commission > 0) {
+
+      const newParentBalance = (parent.wallet_balance || 0) + commission;
+      const newParentProfit = (parent.total_profits || 0) + commission;
+
+      // 5️⃣ Update parent
+      await supabase
+        .from("users")
+        .update({
+          wallet_balance: newParentBalance,
+          total_profits: newParentProfit
+        })
+        .eq("id", parent.id);
+
+      // 6️⃣ Save transaction
+      await supabase.from("transactions").insert({
+        user_email: parent.email,
+        amount: commission,
+        type: "referral_commission",
+        reference: ref,
+        status: "completed",
+        created_at: new Date().toISOString()
+      });
+
+      console.log(`💰 Referral commission: ${parent.email} earned ${commission}`);
+    }
+  }
+}
 
     if (updateUserErr) {
       console.error("❌ User update failed:", updateUserErr);
@@ -1414,9 +1498,22 @@ if (!data) {
 }
 
     console.log("USER FOUND:", data.email);
+// 🔥 APPLY 13-DAY REWARD
+const updatedUser = apply13DayReward(data);
 
+// 🔥 SAVE if reward applied
+if (updatedUser.reward_given && updatedUser.wallet_balance !== data.wallet_balance) {
+  await supabase
+    .from("users")
+    .update({
+      wallet_balance: updatedUser.wallet_balance,
+      total_profits: updatedUser.total_profits,
+      reward_given: updatedUser.reward_given
+    })
+    .eq("id", updatedUser.id);
+}
     // remove password
-    const { password, ...publicData } = data;
+    const { password, ...publicData } = updatedUser;
 
     // 🔥 return ALL needed fields (merged both versions)
     return res.json({
