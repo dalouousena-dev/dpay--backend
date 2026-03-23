@@ -205,6 +205,7 @@ async function getUserByEmail(email) {
     const { data, error } = await supabase
       .from('users')
       .select('*')
+      .eq('email', email)
       .maybeSingle();
     if (!error) return data;
   }
@@ -1838,11 +1839,11 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // verify password
-    if (user.password !== password) {
-      return res.status(401).json({
-        message: "Invalid email or password"
-      });
-    }
+    if (!user || String(user.password).trim() !== String(password).trim()) {
+  return res.status(401).json({
+    message: "Invalid email or password"
+  });
+}
 
     // generate new token
     const newToken = makeToken();
