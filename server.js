@@ -205,8 +205,7 @@ async function getUserByEmail(email) {
     const { data, error } = await supabase
       .from('users')
       .select('*')
-      .eq('email', email)
-      .single();
+      .maybeSingle();
     if (!error) return data;
   }
   return users.find(u => u.email === email);
@@ -224,10 +223,12 @@ async function createUser(userData) {
     .select()
     .single();
 
-  if (error) {
-    console.error('❌ Supabase insert error:', error);
-    throw error;
+ if (error) {
+  if (error.code === "23505") { // PostgreSQL unique violation
+    throw new Error("Email already exists");
   }
+  throw error;
+}
 
   if (!data) {
     throw new Error("User insert returned no data");
@@ -298,7 +299,7 @@ app.post('/api/auth/register', async (req, res) => {
           .from('users')
           .select('*')
           .eq('referral_code', referralCode)
-          .single();
+          .maybeSingle();
 
         if (!error && data) {
           referrer = data;
@@ -386,9 +387,9 @@ app.post('/api/auth/register', async (req, res) => {
 
     console.error("Registration error:", err);
 
-    return res.status(500).json({
-      message: "Registration failed"
-    });
+   return res.status(500).json({
+  message: err.message || "Registration failed"
+});
 
   }
 
