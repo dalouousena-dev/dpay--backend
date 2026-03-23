@@ -949,7 +949,7 @@ if (user.referrer_id) {
     const { error: txErr } = await supabase
   .from("transactions")
   .insert({
-    user_id: user.id
+    user_id: user.id,
     amount: payment.amount,
     type: "plan_purchase",
     reference: ref,
