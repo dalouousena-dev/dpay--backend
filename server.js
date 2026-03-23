@@ -927,7 +927,7 @@ if (user.referrer_id) {
 
       // 6️⃣ Save transaction
       await supabase.from("transactions").insert({
-        user_email: parent.email,
+        user_id: parent.id,
         amount: commission,
         type: "referral_commission",
         reference: ref,
