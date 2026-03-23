@@ -193,7 +193,7 @@ async function getUserByToken(token) {
       .from('users')
       .select('*')
       .eq('token', token)
-      .single();
+      .maybeSingle();
     if (!error) return data;
   }
   return findUserByToken(token);
@@ -222,7 +222,7 @@ async function createUser(userData) {
     .from('users')
     .insert([userData])
     .select()
-    .single();
+   .maybeSingle()
 
 if (error) {
 
@@ -254,7 +254,7 @@ async function updateUser(userId, updates) {
     .update(updates)
     .eq("id", userId)
     .select()
-    .single();
+    .maybeSingle()
 
   if (error) {
     console.error("❌ updateUser failed:", error);
@@ -369,8 +369,7 @@ app.post('/api/auth/register', async (req, res) => {
         .from('users')
         .select('*')
         .eq('id', referrerId)
-        .single();
-
+        .maybeSingle()
       if (!error && referrer) {
 
         const newCount = (referrer.referral_count || 0) + 1;
@@ -411,7 +410,7 @@ app.get("/api/payment-status", async (req, res) => {
     .from("pending_payments")
     .select("status, plan_id")
     .eq("notchpay_reference", ref)
-    .single();
+    .maybeSingle()
 
   if (error || !data) {
     return res.status(404).json({ message: "Payment not found" });
@@ -482,7 +481,7 @@ app.get('/api/referral/stats', async (req, res) => {
       .from('users')
       .select('*')
       .eq('token', token)
-      .single();
+      .maybeSingle()
 
     if (error || !user) {
       return res.status(401).json({ message: 'Invalid token' });
@@ -531,7 +530,7 @@ app.get('/api/referral/code', async (req, res) => {
       .from('users')
       .select('*')
       .eq('token', token)
-      .single();
+      ..maybeSingle()
 
     if (error || !user) {
       return res.status(401).json({ message: 'Invalid token' });
@@ -767,7 +766,7 @@ app.get("/api/payments/check/:reference", async (req, res) => {
       .from("users")
       .select("*")
       .eq("email", email)
-      .single();
+      .maybeSingle()
 
     if (userError || !user) {
       return res.status(404).json({ message: "User not found" });
@@ -825,7 +824,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
       .from("pending_payments")
       .select("*")
       .eq("notchpay_reference", ref)
-      .single();
+      .maybeSingle()
 
     if (error || !pending) {
       console.error("❌ Payment not found");
@@ -849,7 +848,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
       .from("users")
       .select("*")
       .eq("email", pending.user_email)
-      .single();
+      .maybeSingle()
 
     if (userErr || !user) {
       console.error("❌ User not found");
@@ -893,7 +892,7 @@ if (user.referrer_id) {
     .from("users")
     .select("*")
     .eq("id", user.referrer_id)
-    .single();
+    .maybeSingle()
 
   if (!parentError && parent) {
 
@@ -1191,7 +1190,7 @@ app.get("/api/notchpay/webhook", async (req, res) => {
       .from("pending_payments")
       .select("*")
       .eq("notchpay_reference", reference)
-      .single();
+      .maybeSingle()
 
     if (error || !pending) {
       return res.redirect("https://computerarchi.com/Dpay/payment-error");
@@ -1210,7 +1209,7 @@ app.get("/api/notchpay/webhook", async (req, res) => {
     .from("users")
     .select("*")
     .eq("email", pending.user_email)
-    .single();
+    .maybeSingle()
 
   if (userError || !user) {
     console.error("❌ User not found");
@@ -1247,7 +1246,7 @@ app.post('/api/products/buy', async (req, res) => {
       .from('users')
       .select('*')
       .eq('token', token)
-      .single();
+      .maybeSingle()
 
     if (userError || !user) {
       return res.status(401).json({ message: 'Invalid token' });
@@ -1319,7 +1318,7 @@ app.post('/api/products/buy', async (req, res) => {
       })
       .eq('id', user.id)
       .select()
-      .single();
+      .maybeSingle()
 
     if (updateError || !updatedUser) {
       console.error("❌ Update failed:", updateError);
@@ -1484,19 +1483,15 @@ app.post('/api/users/request-withdrawal', async (req, res) => {
       .select("*")
       .eq("token", token)
       .limit(1)
-      .single();
+      .maybeSingle();
 
-   if (error) {
+if (error) {
   console.error("Supabase error:", error);
-  return res.status(500).json({
-    message: "Database error"
-  });
+  return res.status(500).json({ message: "Database error" });
 }
 
 if (!data) {
-  return res.status(401).json({
-    message: "Invalid token"
-  });
+  return res.status(401).json({ message: "Invalid or missing token" });
 }
 
     console.log("USER FOUND:", data.email);
@@ -1665,7 +1660,7 @@ app.post('/api/admin/approve-withdrawal', async (req, res) => {
         .from('withdrawal_requests')
         .select('*')
         .eq('id', requestId)
-        .single();
+        .maybeSingle()
 
       if (wError || !withdrawal) {
         return res.status(404).json({ message: 'Withdrawal request not found' });
@@ -1680,7 +1675,7 @@ app.post('/api/admin/approve-withdrawal', async (req, res) => {
         .from('users')
         .select('wallet_balance') // ✅ FIX column name
         .eq('id', withdrawal.userId)
-        .single();
+        .maybeSingle()
 
       if (user) {
         const newBalance = (user.wallet_balance || 0) - withdrawal.amount;
@@ -1700,7 +1695,7 @@ app.post('/api/admin/approve-withdrawal', async (req, res) => {
         })
         .eq('id', requestId)
         .select()
-        .single();
+        .maybeSingle()
 
       if (uError) throw uError;
 
@@ -1756,7 +1751,7 @@ app.post('/api/admin/reject-withdrawal', async (req, res) => {
         .from('withdrawal_requests')
         .select('*')
         .eq('id', requestId)
-        .single();
+       .maybeSingle()
       
       if (wError || !withdrawal) {
         return res.status(404).json({ message: 'Withdrawal request not found' });
@@ -1776,7 +1771,7 @@ app.post('/api/admin/reject-withdrawal', async (req, res) => {
         })
         .eq('id', requestId)
         .select()
-        .single();
+        .maybeSingle()
       
       if (uError) throw uError;
       
