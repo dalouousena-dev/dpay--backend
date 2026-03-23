@@ -974,9 +974,29 @@ if (user.referrer_id) {
 app.get("/api/transactions", async (req, res) => {
   try {
 
+    const auth = req.headers.authorization || '';
+    const token = auth.replace('Bearer ', '');
+
+    if (!token) {
+      return res.status(401).json({ message: 'Missing token' });
+    }
+
+    // 🔥 Get user from token
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("token", token)
+      .maybeSingle();
+
+    if (userError || !user) {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    // 🔥 FILTER TRANSACTIONS BY USER
     const { data, error } = await supabase
       .from("transactions")
       .select("*")
+      .eq("user_email", user.email)   // ✅ THIS LINE FIXES EVERYTHING
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -989,16 +1009,10 @@ app.get("/api/transactions", async (req, res) => {
     res.json(data);
 
   } catch (err) {
-
     console.error("Transaction fetch error:", err);
-
-    res.status(500).json({
-      message: "Server error"
-    });
-
+    res.status(500).json({ message: "Server error" });
   }
 });
-
 
 // Health check endpoint for NotchPay webhook configuration
 app.get('/api/webhooks/notchpay/health', (req, res) => {
