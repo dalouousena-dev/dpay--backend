@@ -1512,8 +1512,6 @@ try {
 } catch (err) {
   console.error("❌ Reward error:", err);
 }
-    .eq("id", updatedUser.id);
-}
     // remove password
     const { password, ...publicData } = updatedUser;
 
