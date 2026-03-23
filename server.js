@@ -530,7 +530,7 @@ app.get('/api/referral/code', async (req, res) => {
       .from('users')
       .select('*')
       .eq('token', token)
-      ..maybeSingle()
+      .maybeSingle()
 
     if (error || !user) {
       return res.status(401).json({ message: 'Invalid token' });
