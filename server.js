@@ -164,6 +164,7 @@ function apply13DayReward(user) {
 
   return user;
 }
+function getCommissionTier(referralCount) {
   if (referralCount >= 100) return { commissionPercent: 0.20, commission: '20%', daily: 6000, bonusAmount: 0, bonus: 'Elite Partner - VIP benefits', badge: '👑' };
   if (referralCount >= 51) return { commissionPercent: 0.15, commission: '15%', daily: 2250, bonusAmount: 15000, bonus: '15,000 FCFA bonus', badge: '💎' };
   if (referralCount >= 31) return { commissionPercent: 0.12, commission: '12%', daily: 840, bonusAmount: 5000, bonus: '5,000 FCFA bonus', badge: '🌟' };
@@ -172,7 +173,6 @@ function apply13DayReward(user) {
   if (referralCount >= 1) return { commissionPercent: 0.05, commission: '5%', daily: 25, bonusAmount: 0, bonus: 'Standard Member', badge: '👤' };
   return { commissionPercent: 0, commission: '0%', daily: 0, bonusAmount: 0, bonus: 'No referrals yet', badge: '👤' };
 }
-
 // Check if user reached a new tier and return bonus to credit
 function checkTierUpgrade(previousReferralCount, newReferralCount) {
   const previousTier = getCommissionTier(previousReferralCount);
@@ -1511,8 +1511,7 @@ try {
   }
 } catch (err) {
   console.error("❌ Reward error:", err);
-} {
-  await supabase
+}
     .from("users")
     .update({
       wallet_balance: updatedUser.wallet_balance,
