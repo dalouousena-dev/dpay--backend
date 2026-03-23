@@ -815,7 +815,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
     }
 
     const ref = payment.reference;
-    if (!ref) return res.sendStatus(400);
+    if (!ref) return res.sendStatus(200);
 
     console.log("🔎 Processing:", ref);
 
@@ -828,7 +828,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
 
     if (error || !pending) {
       console.error("❌ Payment not found");
-      return res.sendStatus(404);
+      return res.sendStatus(200);
     }
 
     // 🔒 Step 2: HARD idempotency check
@@ -840,7 +840,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
     // 🔒 Step 3: Validate amount
     if (Number(payment.amount) !== Number(pending.amount)) {
       console.error("❌ Amount mismatch");
-      return res.sendStatus(400);
+      return res.sendStatus(200);
     }
 
     // 🔒 Step 4: Fetch user
@@ -852,7 +852,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
 
     if (userErr || !user) {
       console.error("❌ User not found");
-      return res.sendStatus(500);
+      return res.sendStatus(200);
     }
 
     // 🔥 Step 5: Calculate new values
@@ -871,7 +871,7 @@ app.post("/api/notchpay/webhook", async (req, res) => {
 
     if (updatePaymentErr) {
       console.error("❌ Payment update failed:", updatePaymentErr);
-      return res.sendStatus(500);
+      return res.sendStatus(200);
     }
 
     // 🔒 Step 7: Update user (single source of truth)
@@ -940,16 +940,16 @@ if (user.referrer_id) {
   }
 }
 
-    if (updateUserErr) {
-      console.error("❌ User update failed:", updateUserErr);
-      return res.sendStatus(500);
-    }
+   if (updateUserErr) {
+  console.error("❌ User update failed:", updateUserErr);
+  return res.sendStatus(200);   // ✅ ALWAYS 200
+}
 
     // 🔒 Step 8: Insert transaction safely
     const { error: txErr } = await supabase
   .from("transactions")
   .insert({
-    user_email: pending.user_email,
+    user_id: user.id
     amount: payment.amount,
     type: "plan_purchase",
     reference: ref,
@@ -968,7 +968,7 @@ if (user.referrer_id) {
 
   } catch (err) {
     console.error("🔥 Webhook crash:", err);
-    return res.sendStatus(500);
+    return res.sendStatus(200);
   }
 });
 app.get("/api/transactions", async (req, res) => {
@@ -978,7 +978,7 @@ app.get("/api/transactions", async (req, res) => {
     const token = auth.replace('Bearer ', '');
 
     if (!token) {
-      return res.status(401).json({ message: 'Missing token' });
+      return res.status(200).json({ message: 'Missing token' });
     }
 
     // 🔥 Get user from token
@@ -989,18 +989,18 @@ app.get("/api/transactions", async (req, res) => {
       .maybeSingle();
 
     if (userError || !user) {
-      return res.status(401).json({ message: "Invalid token" });
+      return res.status(200).json({ message: "Invalid token" });
     }
 
     // 🔥 FILTER TRANSACTIONS BY USER
     const { data, error } = await supabase
       .from("transactions")
       .select("*")
-      .eq("user_email", user.email)   // ✅ THIS LINE FIXES EVERYTHING
+      .eq("user_id", user.id)  // ✅ THIS LINE FIXES EVERYTHING
       .order("created_at", { ascending: false });
 
     if (error) {
-      return res.status(500).json({
+      return res.status(200).json({
         message: "Failed to fetch transactions",
         error
       });
