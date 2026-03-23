@@ -139,35 +139,31 @@ function findUserByReferralCode(code) {
   );
 }
 
-// calculate commission tier based on referral count
-function getCommissionTier(referralCount) {
-  function apply13DayReward(user) {
+function apply13DayReward(user) {
   if (!user.next_purchase_window_ends) return user;
 
   const now = new Date();
   const cooldownEnd = new Date(user.next_purchase_window_ends);
 
-  // ❌ Still in cooldown
+  // Still in cooldown
   if (cooldownEnd > now) return user;
 
-  // ❌ Already rewarded
+  // Already rewarded
   if (user.reward_given) return user;
 
   const percentage = 0.32292;
-
   const reward = Math.floor((user.total_deposited || 0) * percentage);
 
   if (reward <= 0) return user;
 
-  // ✅ Apply reward
   user.wallet_balance = (user.wallet_balance || 0) + reward;
   user.total_profits = (user.total_profits || 0) + reward;
-
   user.reward_given = true;
 
   console.log(`🎁 Reward given to ${user.email}: ${reward}`);
 
   return user;
+}
 }
   if (referralCount >= 100) return { commissionPercent: 0.20, commission: '20%', daily: 6000, bonusAmount: 0, bonus: 'Elite Partner - VIP benefits', badge: '👑' };
   if (referralCount >= 51) return { commissionPercent: 0.15, commission: '15%', daily: 2250, bonusAmount: 15000, bonus: '15,000 FCFA bonus', badge: '💎' };
@@ -1499,10 +1495,24 @@ if (!data) {
 
     console.log("USER FOUND:", data.email);
 // 🔥 APPLY 13-DAY REWARD
-const updatedUser = apply13DayReward(data);
+let updatedUser = data;
 
-// 🔥 SAVE if reward applied
-if (updatedUser.reward_given && updatedUser.wallet_balance !== data.wallet_balance) {
+try {
+  updatedUser = apply13DayReward(data);
+
+  if (updatedUser.reward_given) {
+    await supabase
+      .from("users")
+      .update({
+        wallet_balance: updatedUser.wallet_balance,
+        total_profits: updatedUser.total_profits,
+        reward_given: updatedUser.reward_given
+      })
+      .eq("id", updatedUser.id);
+  }
+} catch (err) {
+  console.error("❌ Reward error:", err);
+} {
   await supabase
     .from("users")
     .update({
