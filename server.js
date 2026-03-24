@@ -642,7 +642,7 @@ return_url: successUrl,
    const response = await fetch("https://ashtechpay.top/api/v1/hosted-payment/create", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(paymentData)
