@@ -728,7 +728,7 @@ app.get("/api/payments/check/:reference", async (req, res) => {
     const verifyResponse = await fetch(endpoint, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       }
     });
@@ -1184,7 +1184,7 @@ app.get("/api/notchpay/webhook", async (req, res) => {
     const verifyResponse = await fetch(`${baseURL}/payments/${reference}`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       }
     });
