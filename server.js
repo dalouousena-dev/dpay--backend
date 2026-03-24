@@ -673,7 +673,7 @@ return_url: successUrl,
   if (!response.data || !response.data.payment_link) {
   console.error("❌ Missing payment URL:", response.data);
   throw new Error("Payment URL missing");
-}}
+}
 
     const reference =
       data?.transaction?.reference ||
