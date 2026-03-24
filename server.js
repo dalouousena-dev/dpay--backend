@@ -1444,6 +1444,30 @@ app.post("/api/withdraw", async (req, res) => {
       return res.status(401).json({ message: "Invalid user" });
     }
 
+    // 🔥 CHECK LAST APPROVED WITHDRAWAL (30 DAYS RULE)
+const { data: lastWithdrawal } = await supabase
+  .from("withdrawals")
+  .select("*")
+  .eq("user_id", user.id)
+  .eq("status", "approved")
+  .order("created_at", { ascending: false })
+  .limit(1)
+  .maybeSingle();
+
+if (lastWithdrawal) {
+  const lastDate = new Date(lastWithdrawal.created_at);
+  const nextAllowed = new Date(
+    lastDate.getTime() + 30 * 24 * 60 * 60 * 1000
+  );
+
+  if (new Date() < nextAllowed) {
+    return res.status(403).json({
+      message: "You must wait 30 days before next withdrawal",
+      nextAllowed
+    });
+  }
+}
+
     // 💣 CRITICAL CHECK
     if (user.wallet_balance < amount) {
       return res.status(400).json({ message: "Insufficient balance" });
