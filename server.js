@@ -668,15 +668,12 @@ return_url: successUrl,
       });
     }
 
-    const paymentUrl = data?.authorization_url;
+   const paymentUrl = response.data.payment_link;
 
-    if (!paymentUrl) {
-      console.error("❌ Missing payment URL:", data);
-      return res.status(500).json({
-        message: "Payment URL missing",
-        notchpay_response: data
-      });
-    }
+  if (!response.data || !response.data.payment_link) {
+  console.error("❌ Missing payment URL:", response.data);
+  throw new Error("Payment URL missing");
+}}
 
     const reference =
       data?.transaction?.reference ||
