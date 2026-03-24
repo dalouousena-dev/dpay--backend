@@ -661,17 +661,17 @@ return_url: successUrl,
 
     console.log("NOTCHPAY INIT RESPONSE:", JSON.stringify(data, null, 2));
 
-    if (!response.ok && data.code !== 201) {
+   if (!response.ok) {
       return res.status(500).json({
         message: "NotchPay initialization failed",
         notchpay_response: data
       });
     }
 
-   const paymentUrl = response.data.payment_link;
+const paymentUrl = data.payment_link;
 
-  if (!response.data || !response.data.payment_link) {
-  console.error("❌ Missing payment URL:", response.data);
+  if (!data || !data.payment_link) {
+  console.error("❌ Missing payment URL:", data);
   throw new Error("Payment URL missing");
 }
 
