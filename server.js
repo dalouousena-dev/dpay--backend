@@ -422,6 +422,7 @@ app.get("/api/payment-status", async (req, res) => {
   });
 });
 
+
 app.post('/api/auth/admin-login', async (req, res) => {
   try {
 
@@ -1417,58 +1418,166 @@ app.post('/api/products/sell', async (req, res) => {
 
 // --- withdrawal endpoints ---
 
-app.post('/api/users/request-withdrawal', async (req, res) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  const user = findUserByToken(token);
-  if (!user) {
-    return res.status(401).json({ message: 'Unauthorized' });
+app.post("/api/withdraw", async (req, res) => {
+  try {
+    const auth = req.headers.authorization || "";
+    const token = auth.replace("Bearer ", "");
+
+    const { amount, phone } = req.body;
+
+    if (!token) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: "Invalid amount" });
+    }
+
+    // 🔥 Get user
+    const { data: user, error: userErr } = await supabase
+      .from("users")
+      .select("*")
+      .eq("token", token)
+      .maybeSingle();
+
+    if (userErr || !user) {
+      return res.status(401).json({ message: "Invalid user" });
+    }
+
+    // 💣 CRITICAL CHECK
+    if (user.wallet_balance < amount) {
+      return res.status(400).json({ message: "Insufficient balance" });
+    }
+
+    // 🔒 CHECK pending withdrawals
+    const { data: existing } = await supabase
+      .from("withdrawals")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("status", "pending");
+
+    if (existing.length > 0) {
+      return res.status(400).json({
+        message: "You already have a pending withdrawal"
+      });
+    }
+
+    // 🔥 INSERT withdrawal
+    const { error: insertErr } = await supabase
+      .from("withdrawals")
+      .insert({
+        user_id: user.id,
+        amount,
+        phone,
+        status: "pending"
+      });
+
+    if (insertErr) {
+      return res.status(500).json({ message: "Failed to create withdrawal" });
+    }
+
+    // 🔥 REDUCE BALANCE (LOCK MONEY)
+    const { error: updateErr } = await supabase
+      .from("users")
+      .update({
+        wallet_balance: user.wallet_balance - amount
+      })
+      .eq("id", user.id);
+
+    if (updateErr) {
+      return res.status(500).json({ message: "Failed to update balance" });
+    }
+
+    res.json({ message: "Withdrawal request submitted" });
+
+  } catch (err) {
+    console.error("Withdraw error:", err);
+    res.status(500).json({ message: "Server error" });
   }
-
-  const { amount, phoneNumber, paymentMethod } = req.body;
-  
-  if (!amount || !phoneNumber || !paymentMethod) {
-    return res.status(400).json({ message: 'Missing required fields' });
-  }
-
-  // Check if user can withdraw (after 30 days)
-  const withdrawalEligibleDate = user.withdrawalAvailableAt 
-    ? new Date(user.withdrawalAvailableAt)
-    : new Date(new Date(user.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000);
-  
-  if (new Date() < withdrawalEligibleDate) {
-    return res.status(403).json({ 
-      message: 'You can only withdraw after 30 days',
-      eligibleAt: withdrawalEligibleDate
-    });
-  }
-
-  // Validate withdrawal amount
-  if (amount <= 0 || amount > user.walletBalance) {
-    return res.status(400).json({ message: 'Invalid withdrawal amount' });
-  }
-
-  // Create withdrawal request
-  const withdrawalRequest = {
-    id: `wr_${Date.now()}_${user.id}`,
-    userId: user.id,
-    username: user.username,
-    email: user.email,
-    amount: parseInt(amount),
-    phoneNumber,
-    paymentMethod,
-    timestamp: new Date().toISOString(),
-    status: 'pending'
-  };
-
-  pendingWithdrawals.push(withdrawalRequest);
-  console.log(`Withdrawal request created: ${withdrawalRequest.id} for user ${user.email}`);
-
-  return res.json({ 
-    message: 'Withdrawal request submitted. Admin will review shortly.',
-    requestId: withdrawalRequest.id
-  });
 });
+app.get("/api/admin/withdrawals", async (req, res) => {
+  const token = req.headers.authorization?.replace("Bearer ", "");
+
+  if (token !== adminToken) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const { data, error } = await supabase
+    .from("withdrawals")
+    .select(`
+      id,
+      amount,
+      phone,
+      status,
+      created_at,
+      users(email)
+    `)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return res.status(500).json({ message: "Failed to fetch withdrawals" });
+  }
+
+  res.json(data);
+});
+
+app.post("/api/admin/withdraw/approve", async (req, res) => {
+  const token = req.headers.authorization?.replace("Bearer ", "");
+  const { id } = req.body;
+
+  if (token !== adminToken) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  await supabase
+    .from("withdrawals")
+    .update({ status: "approved" })
+    .eq("id", id);
+
+  res.json({ message: "Approved" });
+});
+app.post("/api/admin/withdraw/reject", async (req, res) => {
+  const token = req.headers.authorization?.replace("Bearer ", "");
+  const { id } = req.body;
+
+  if (token !== adminToken) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  // 🔥 get withdrawal
+  const { data: withdrawal } = await supabase
+    .from("withdrawals")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!withdrawal) {
+    return res.status(404).json({ message: "Not found" });
+  }
+
+  // 🔥 refund user
+  const { data: user } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", withdrawal.user_id)
+    .maybeSingle();
+
+  await supabase
+    .from("users")
+    .update({
+      wallet_balance: user.wallet_balance + withdrawal.amount
+    })
+    .eq("id", user.id);
+
+  // update status
+  await supabase
+    .from("withdrawals")
+    .update({ status: "rejected" })
+    .eq("id", id);
+
+  res.json({ message: "Rejected and refunded" });
+});
+
 
   app.get("/api/users/profile", async (req, res) => {
   try {
