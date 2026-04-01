@@ -1322,12 +1322,14 @@ app.post('/api/products/buy', async (req, res) => {
 
     const { data: updatedUser, error: updateError } = await supabase
       .from('users')
-      .update({
-        wallet_balance: newBalance,
-        last_product_purchase: now,
-        next_purchase_window_ends: newCooldown,
-        is_earning: true
-      })
+     .update({
+  wallet_balance: newBalance,
+  last_product_purchase: now,
+  next_purchase_window_ends: newCooldown,
+  is_earning: true,
+  reward_given: false,          // 🔥 reset cycle
+  last_purchase_amount: price   // 🔥 track this purchase
+})
       .eq('id', user.id)
       .select()
       .maybeSingle()
