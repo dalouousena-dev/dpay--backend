@@ -1126,7 +1126,7 @@ setInterval(() => {
 
 // 🔵 PRODUCTS (OUTSIDE of intervals — this was wrongly nested before)
 const PRODUCTS = [
-  { id: 1, name: '📱 Smartphone', price: 5000, minVip: null },
+  { id: 1, name: '📱 Smartphone', price: 10000, minVip: null },
   { id: 2, name: '🎧 Headphones', price: 2000, minVip: null },
   { id: 3, name: '💻 Laptop', price: 25000, minVip: 'vip2' },
   { id: 4, name: '📷 Camera', price: 15000, minVip: 'vip2' },
