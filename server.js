@@ -1264,12 +1264,17 @@ app.post('/api/products/buy', async (req, res) => {
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    const { productId } = req.body;
+   const productId = Number(req.body.productId);
 
-    const product = PRODUCTS.find(p => p.id === productId);
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
+   if (!productId) {
+  return res.status(400).json({ message: "Invalid productId" });
+}
+
+const product = PRODUCTS.find(p => p.id === productId);
+
+if (!product) {
+  return res.status(404).json({ message: "Product not found" });
+}
 
     // ✅ VIP check
     if (product.minVip && vipLevel(user.active_plan) < vipLevel(product.minVip)) {
