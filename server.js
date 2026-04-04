@@ -151,10 +151,10 @@ function apply13DayReward(user) {
   // Already rewarded
   if (user.reward_given) return user;
 
-  const percentage = 0.32292;
-  const reward = Math.floor((user.total_deposited || 0) * percentage);
+const percentage = 0.32292;
+const reward = Math.floor((user.last_purchase_amount || 0) * percentage);
 
-  if (reward <= 0) return user;
+  if (user.reward_given) return user;
 
   user.wallet_balance = (user.wallet_balance || 0) + reward;
   user.total_profits = (user.total_profits || 0) + reward;
@@ -1332,8 +1332,9 @@ if (!product) {
   last_product_purchase: now,
   next_purchase_window_ends: newCooldown,
   is_earning: true,
-  reward_given: false,          // 🔥 reset cycle
-  last_purchase_amount: price   // 🔥 track this purchase
+  reward_given: false,
+
+  last_purchase_amount: price   // ✅ THIS IS NOW IMPORTANT
 })
       .eq('id', user.id)
       .select()
