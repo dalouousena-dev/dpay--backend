@@ -1653,7 +1653,7 @@ let updatedUser = data;
 try {
   updatedUser = apply13DayReward(data);
 
-  if (updatedUser.reward_given) {
+if (updatedUser !== data) {
     await supabase
       .from("users")
       .update({
