@@ -1474,7 +1474,7 @@ if (lastWithdrawal) {
 }
 
     // 💣 CRITICAL CHECK
-    if (user.wallet_balance < amount) {
+  if ((user.total_profits || 0) < amount) {
       return res.status(400).json({ message: "Insufficient balance" });
     }
 
@@ -1507,10 +1507,11 @@ if (lastWithdrawal) {
 
     // 🔥 REDUCE BALANCE (LOCK MONEY)
     const { error: updateErr } = await supabase
-      .from("users")
-      .update({
-        wallet_balance: user.wallet_balance - amount
-      })
+  .from("users")
+  .update({
+    total_profits: (user.total_profits || 0) - amount
+  })
+  .eq("id", user.id);
       .eq("id", user.id);
 
     if (updateErr) {
