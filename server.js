@@ -1512,7 +1512,6 @@ if (lastWithdrawal) {
     total_profits: (user.total_profits || 0) - amount
   })
   .eq("id", user.id);
-      .eq("id", user.id);
 
     if (updateErr) {
       return res.status(500).json({ message: "Failed to update balance" });
