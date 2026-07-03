@@ -846,7 +846,16 @@ app.get('/api/users/my-withdrawals', async (req, res) => {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return res.json(data || []);
+    return res.json((data || []).map(w => ({
+  ...w,
+  paymentMethod:   w.payment_method,
+  phoneNumber:     w.phone_number,
+  approvedAt:      w.approved_at,
+  adminModified:   w.admin_modified,
+  adminNote:       w.admin_note,
+  rejectionReason: w.rejection_reason,
+})));
+
   } catch (err) {
     console.error('Error fetching user withdrawals:', err);
     res.status(500).json({ message: 'Error fetching withdrawals' });
